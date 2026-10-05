@@ -256,8 +256,8 @@ header .brand-tagline {
 
 .client-row .delete-btn {
   background: none;
-  border: 1px solid var(--danger);
-  color: var(--danger);
+  border: 1px solid rgba(234, 67, 53, 0.45);
+  color: #c9958d;
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -265,8 +265,9 @@ header .brand-tagline {
   transition: all 0.2s;
 }
 .client-row .delete-btn:hover {
-  background: var(--danger);
+  background: rgba(234, 67, 53, 0.8);
   color: white;
+  border-color: transparent;
 }
 
 .empty-msg {
@@ -553,16 +554,16 @@ header .brand-tagline {
 
 .drive-btn {
   padding: 8px 16px;
-  background: #1a73e8;
-  color: white;
-  border: none;
+  background: rgba(200, 151, 63, 0.12);
+  color: #d3b585;
+  border: 1px solid rgba(200, 151, 63, 0.35);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
 }
-.drive-btn:hover { background: #1557b0; }
+.drive-btn:hover { background: rgba(200, 151, 63, 0.22); }
 
 .photo-actions {
   display: flex;
@@ -581,14 +582,14 @@ header .brand-tagline {
 .clear-photo-btn {
   padding: 5px 10px;
   background: transparent;
-  border: 1px solid var(--danger, #e74c3c);
-  color: var(--danger, #e74c3c);
+  border: 1px solid rgba(234, 67, 53, 0.45);
+  color: #c9958d;
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.clear-photo-btn:hover { background: var(--danger, #e74c3c); color: white; }
+.clear-photo-btn:hover { background: rgba(234, 67, 53, 0.8); color: white; border-color: transparent; }
 
 .gauth-status {
   font-size: 13px;
@@ -744,9 +745,9 @@ header .brand-tagline {
   font-size: 12px;
   font-weight: 600;
 }
-.status-menunggu { background: rgba(243, 156, 18, 0.18); color: #f0b958; }
-.status-diproses { background: rgba(66, 133, 244, 0.18); color: #8ab4f8; }
-.status-selesai { background: rgba(52, 168, 83, 0.18); color: #6ddc8c; }
+.status-menunggu { background: rgba(243, 156, 18, 0.09); color: #c7a877; }
+.status-diproses { background: rgba(120, 150, 210, 0.09); color: #97a8c0; }
+.status-selesai { background: rgba(52, 168, 83, 0.09); color: #92b39a; }
 
 .status-btn {
   padding: 5px 12px;
@@ -758,9 +759,9 @@ header .brand-tagline {
   transition: opacity 0.2s;
 }
 .status-btn:hover { opacity: 0.8; }
-.status-btn.s-menunggu { background: rgba(243, 156, 18, 0.18); color: #f0b958; }
-.status-btn.s-diproses { background: rgba(66, 133, 244, 0.18); color: #8ab4f8; }
-.status-btn.s-selesai { background: rgba(52, 168, 83, 0.18); color: #6ddc8c; }
+.status-btn.s-menunggu { background: rgba(243, 156, 18, 0.09); color: #c7a877; }
+.status-btn.s-diproses { background: rgba(120, 150, 210, 0.09); color: #97a8c0; }
+.status-btn.s-selesai { background: rgba(52, 168, 83, 0.09); color: #92b39a; }
 
 .status-picker {
   display: flex;
@@ -826,12 +827,12 @@ header .brand-tagline {
 
 /* SELECTED FILES INFO */
 .selected-info {
-  background: rgba(52, 168, 83, 0.12);
-  border-left: 3px solid var(--success);
+  background: rgba(52, 168, 83, 0.06);
+  border-left: 3px solid rgba(52, 168, 83, 0.5);
   padding: 8px 12px;
   border-radius: 0 6px 6px 0;
   font-size: 13px;
-  color: #6ddc8c;
+  color: #9fb4a5;
   margin-top: 6px;
 }
 
@@ -845,16 +846,17 @@ header .brand-tagline {
 .clear-all-btn {
   padding: 8px 18px;
   background: transparent;
-  color: var(--danger);
-  border: 1px solid var(--danger);
+  color: #c9958d;
+  border: 1px solid rgba(234, 67, 53, 0.45);
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
 .clear-all-btn:hover {
-  background: var(--danger);
+  background: rgba(234, 67, 53, 0.8);
   color: white;
+  border-color: transparent;
 }
 
 /* RESPONSIVE */
