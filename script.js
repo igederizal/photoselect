@@ -11,6 +11,10 @@ let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
 const MAX_PHOTOS = 5000;    // batas foto per client
 const GOOGLE_AUTH_TTL = 24 * 60 * 60 * 1000; // login Google admin berlaku 24 jam
 
+// Izin Drive: baca semua + buat folder + salin file (untuk fitur folder terpilih)
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+const SCOPE_ID = 'drive-full-v1';
+
 // Token Google di-cache. Login interaktif terakhir berlaku 24 jam
 // (di dalam jendela itu token di-refresh senyap tanpa popup login)
 let cachedToken = '';
@@ -22,6 +26,16 @@ try {
   cachedToken = localStorage.getItem('g_access_token') || '';
   tokenExpiry = parseInt(localStorage.getItem('g_token_expiry') || '0', 10);
   gAuthTime = parseInt(localStorage.getItem('g_auth_time') || '0', 10);
+
+  // Scope izin berubah → buang token lama, paksa login ulang dengan izin baru
+  if (localStorage.getItem('g_scope') !== SCOPE_ID) {
+    cachedToken = '';
+    tokenExpiry = 0;
+    gAuthTime = 0;
+    localStorage.removeItem('g_access_token');
+    localStorage.removeItem('g_token_expiry');
+    localStorage.removeItem('g_auth_time');
+  }
 } catch (e) {}
 
 // Session lama (sebelum ada hitungan 24 jam) → mulai hitung dari sekarang
@@ -66,7 +80,7 @@ function getDriveToken(callback) {
 function requestGoogleToken(prompt, callback, canRetry) {
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    scope: DRIVE_SCOPE,
     callback: (resp) => {
       if (resp.error) {
         // Token senyap gagal → coba tampilan login biasa
@@ -87,6 +101,7 @@ function requestGoogleToken(prompt, callback, canRetry) {
         localStorage.setItem('g_access_token', cachedToken);
         localStorage.setItem('g_token_expiry', String(tokenExpiry));
         localStorage.setItem('g_auth_time', String(gAuthTime));
+        localStorage.setItem('g_scope', SCOPE_ID);
       } catch (e) {}
       callback(cachedToken);
     }
@@ -609,6 +624,126 @@ async function clearClientPhotos(id) {
 }
 
 // =====================
+// ADMIN: SALIN FOTO TERPILIH KE FOTO DRIVE BARU
+// =====================
+async function findOrCreateFolder(token, name) {
+  const esc = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const q = `name = '${esc}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const url = 'https://www.googleapis.com/drive/v3/files?' +
+    new URLSearchParams({ q: q, fields: 'files(id)', pageSize: '10' });
+
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  if (j.files && j.files.length) return j.files[0].id;
+
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const cj = await cr.json();
+  if (cj.error) throw new Error(cj.error.message);
+  return cj.id;
+}
+
+async function listChildNames(token, folderId) {
+  const names = new Set();
+  let pageToken = '';
+  do {
+    const url = 'https://www.googleapis.com/drive/v3/files?' +
+      new URLSearchParams({
+        q: `'${folderId}' in parents and trashed=false`,
+        fields: 'nextPageToken,files(name)',
+        pageSize: '1000',
+        pageToken: pageToken
+      }).toString();
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message);
+    (j.files || []).forEach(f => names.add(f.name));
+    pageToken = j.nextPageToken || '';
+  } while (pageToken);
+  return names;
+}
+
+async function copySelectedToDrive(clientId) {
+  const client = clients.find(c => c.id === clientId);
+  if (!client) return;
+
+  const sel = client.selected_files || [];
+  if (!client.submitted || sel.length === 0) {
+    showModal('ℹ️', 'Client ini belum mengirim pilihan foto.');
+    return;
+  }
+
+  getDriveToken(async (token) => {
+    try {
+      const folderName = client.folder + '_Selected';
+      showModal('⏳', `Mempersiapkan folder "${folderName}"...`);
+
+      const folderId = await findOrCreateFolder(token, folderName);
+      const existing = await listChildNames(token, folderId);
+
+      const items = sel
+        .map(f => (typeof f === 'string' ? { name: f } : { id: f.id, name: f.name }))
+        .filter(f => f.id);
+
+      let copied = 0, skipped = 0, failed = 0, done = 0;
+
+      for (let i = 0; i < items.length; i += 4) {
+        await Promise.all(items.slice(i, i + 4).map(async f => {
+          done++;
+          if (existing.has(f.name)) {
+            skipped++;
+            return;
+          }
+
+          try {
+            const r = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${f.id}/copy`,
+              {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: f.name, parents: [folderId] })
+              }
+            );
+            const j = await r.json();
+            if (j.error) throw new Error(j.error.message);
+            copied++;
+          } catch (e) {
+            console.warn('Gagal salin', f.name, e);
+            failed++;
+          }
+          showModal('⏳', `Menyalin foto ke Drive... ${done}/${items.length}`);
+        }));
+      }
+
+      const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+
+      const { error } = await db
+        .from('clients')
+        .update({ selected_folder: folderUrl })
+        .eq('id', client.id);
+
+      if (error) console.warn('Gagal simpan link folder:', error);
+      client.selected_folder = folderUrl;
+      renderClientList();
+
+      showModal('✅',
+        `Folder "${folderName}" siap di Google Drive!\n\n` +
+        `Disalin: ${copied}\n` +
+        `Sudah ada (dilewati): ${skipped}\n` +
+        `Gagal: ${failed}\n\n` +
+        `Klik "🔗 Buka folder" di kartu client untuk membukanya.`
+      );
+    } catch (e) {
+      showModal('❌', 'Gagal membuat folder: ' + e.message);
+    }
+  });
+}
+
+// =====================
 // ADMIN: RENDER LIST
 // =====================
 function renderClientList() {
@@ -660,6 +795,13 @@ function renderClientList() {
       </div>
 
       ${selectedInfo}
+      ${client.submitted && files.length > 0 ? `
+      <div class="folder-actions">
+        <button class="drive-btn" onclick="copySelectedToDrive(${client.id})">
+          📁 Salin ${files.length} foto terpilih ke folder
+        </button>
+        ${client.selected_folder ? `<a class="folder-link" href="${client.selected_folder}" target="_blank" rel="noopener">🔗 Buka folder di Drive</a>` : ''}
+      </div>` : ''}
       ${noteInfo}
 
       <button class="delete-btn" onclick="deleteClient(${client.id})">Hapus</button>
