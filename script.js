@@ -196,7 +196,8 @@ async function onPickerCallback(data) {
   showModal('✅',
     `${added} foto berhasil diposting ke "${target.name}"!\n` +
     `Total foto: ${toSave.length}${toSave.length >= MAX_PHOTOS ? ' (maksimal ' + MAX_PHOTOS + ')' : ''}\n` +
-    `Thumbnail tersimpan: ${thumbResult.ok} gagal: ${thumbResult.fail}\n\n` +
+    `Thumbnail tersimpan: ${thumbResult.ok} gagal: ${thumbResult.fail}` +
+    (thumbResult.fail > 0 && thumbResult.error ? `\n\nError: ${thumbResult.error}` : '') + `\n\n` +
     `Client sekarang bisa memilih foto ini.`
   );
 }
@@ -210,6 +211,7 @@ async function cacheThumbnails(items, token, clientId) {
 
   let ok = 0, fail = 0;
   let processed = 0;
+  let firstError = '';
   let useDirect = false; // fallback langsung (untuk localhost tanpa server Vercel)
   const BATCH = 40;
 
@@ -250,6 +252,8 @@ async function cacheThumbnails(items, token, clientId) {
           ok++;
         } else {
           fail++;
+          if (!firstError && r.error) firstError = r.error;
+          console.warn('Server thumb error:', r.id, r.error);
         }
         processed++;
       });
@@ -282,7 +286,7 @@ async function cacheThumbnails(items, token, clientId) {
     showModal('⏳', `Menyimpan thumbnail... ${processed}/${total}`);
   }
 
-  return { ok, fail };
+  return { ok: ok, fail: fail, error: firstError };
 }
 
 async function resizeBlob(blobIn, maxW) {
