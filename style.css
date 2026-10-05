@@ -1,21 +1,31 @@
 :root {
-  --primary: #4285f4;
-  --primary-dark: #3367d6;
+  --primary: #c8973f;
+  --primary-dark: #a97c2c;
   --success: #34a853;
   --danger: #ea4335;
   --warning: #f39c12;
-  --bg: #f8f9fa;
-  --card: #ffffff;
-  --text: #202124;
-  --text2: #5f6368;
-  --border: #e0e0e0;
+  --bg: #171310;
+  --card: #211b16;
+  --text: #f3ede4;
+  --text2: #b7aa98;
+  --border: #3a3128;
+  --accent: #b05c3f;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+input, textarea {
+  background: #2a231d;
+  color: var(--text);
+}
+input::placeholder, textarea::placeholder { color: #8a7d6c; }
+
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: var(--bg);
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(176, 92, 63, 0.18), transparent 55%),
+    radial-gradient(ellipse at 80% 100%, rgba(200, 151, 63, 0.10), transparent 55%),
+    var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
@@ -29,10 +39,30 @@ body {
 /* HEADER */
 header {
   text-align: center;
-  padding: 30px 0 20px;
+  padding: 34px 0 24px;
 }
-header h1 { font-size: 26px; margin-bottom: 6px; }
-header p { color: var(--text2); font-size: 14px; }
+.brand-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+}
+header h1 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+header .brand-tagline {
+  color: var(--primary);
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
 
 /* TAB CONTENT */
 .tab-content { animation: fadeIn 0.3s; }
@@ -133,8 +163,8 @@ header p { color: var(--text2); font-size: 14px; }
   padding: 10px;
   border-radius: 6px;
   font-size: 14px;
-  background: #e6f4ea;
-  color: var(--success);
+  background: rgba(52, 168, 83, 0.15);
+  color: #6ddc8c;
   font-weight: 500;
 }
 
@@ -346,7 +376,8 @@ header p { color: var(--text2); font-size: 14px; }
   z-index: 1000;
 }
 .modal-box {
-  background: white;
+  background: var(--card);
+  border: 1px solid var(--border);
   padding: 30px 40px;
   border-radius: 12px;
   text-align: center;
@@ -425,16 +456,16 @@ header p { color: var(--text2); font-size: 14px; }
 .admin-hint {
   margin-top: 20px;
   padding: 14px;
-  background: #fff8e1;
-  border: 1px solid #ffe082;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.4);
   border-radius: 8px;
   font-size: 13px;
-  color: #f57f17;
+  color: #f0b958;
   line-height: 1.6;
 }
 .admin-hint .small {
   font-size: 11px;
-  color: #bf8f00;
+  color: var(--text2);
   margin-top: 4px;
 }
 
@@ -698,9 +729,9 @@ header p { color: var(--text2); font-size: 14px; }
   font-size: 12px;
   font-weight: 600;
 }
-.status-menunggu { background: #fff3cd; color: #856404; }
-.status-diproses { background: #cce5ff; color: #004085; }
-.status-selesai { background: #d4edda; color: #155724; }
+.status-menunggu { background: rgba(243, 156, 18, 0.18); color: #f0b958; }
+.status-diproses { background: rgba(66, 133, 244, 0.18); color: #8ab4f8; }
+.status-selesai { background: rgba(52, 168, 83, 0.18); color: #6ddc8c; }
 
 .status-btn {
   padding: 5px 12px;
@@ -712,9 +743,9 @@ header p { color: var(--text2); font-size: 14px; }
   transition: opacity 0.2s;
 }
 .status-btn:hover { opacity: 0.8; }
-.status-btn.s-menunggu { background: #fff3cd; color: #856404; }
-.status-btn.s-diproses { background: #cce5ff; color: #004085; }
-.status-btn.s-selesai { background: #d4edda; color: #155724; }
+.status-btn.s-menunggu { background: rgba(243, 156, 18, 0.18); color: #f0b958; }
+.status-btn.s-diproses { background: rgba(66, 133, 244, 0.18); color: #8ab4f8; }
+.status-btn.s-selesai { background: rgba(52, 168, 83, 0.18); color: #6ddc8c; }
 
 .status-picker {
   display: flex;
@@ -764,12 +795,12 @@ header p { color: var(--text2); font-size: 14px; }
 
 /* NOTE DISPLAY (di admin) */
 .note-box {
-  background: #fff8e1;
+  background: rgba(243, 156, 18, 0.10);
   border-left: 3px solid var(--warning);
   padding: 8px 12px;
   border-radius: 0 6px 6px 0;
   font-size: 13px;
-  color: #666;
+  color: var(--text2);
   margin-top: 6px;
   font-style: italic;
 }
@@ -780,12 +811,12 @@ header p { color: var(--text2); font-size: 14px; }
 
 /* SELECTED FILES INFO */
 .selected-info {
-  background: #e6f4ea;
+  background: rgba(52, 168, 83, 0.12);
   border-left: 3px solid var(--success);
   padding: 8px 12px;
   border-radius: 0 6px 6px 0;
   font-size: 13px;
-  color: #155724;
+  color: #6ddc8c;
   margin-top: 6px;
 }
 
@@ -798,7 +829,7 @@ header p { color: var(--text2); font-size: 14px; }
 }
 .clear-all-btn {
   padding: 8px 18px;
-  background: #fff;
+  background: transparent;
   color: var(--danger);
   border: 1px solid var(--danger);
   border-radius: 6px;
