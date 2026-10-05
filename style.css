@@ -544,6 +544,15 @@ header p { color: var(--text2); font-size: 14px; }
 }
 .clear-photo-btn:hover { background: var(--danger, #e74c3c); color: white; }
 
+.gauth-status {
+  font-size: 13px;
+  color: var(--text2);
+  flex: 1;
+  min-width: 180px;
+  line-height: 1.5;
+}
+.gauth-status strong { color: var(--text); }
+
 /* Zoom foto (pratinjau layar penuh) */
 .zoom-overlay {
   position: fixed;

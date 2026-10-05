@@ -9,14 +9,23 @@ let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
 const MAX_PHOTOS = 5000;    // batas foto per client
+const GOOGLE_AUTH_TTL = 24 * 60 * 60 * 1000; // login Google admin berlaku 24 jam
 
-// Token Google di-cache (berlaku ±1 jam) supaya tidak login terus
+// Token Google di-cache. Login interaktif terakhir berlaku 24 jam
+// (di dalam jendela itu token di-refresh senyap tanpa popup login)
 let cachedToken = '';
 let tokenExpiry = 0;
+let gAuthTime = 0;            // waktu login Google interaktif terakhir
+let forceAccountChooser = false; // true setelah admin klik "Ganti Akun"
+
 try {
   cachedToken = localStorage.getItem('g_access_token') || '';
   tokenExpiry = parseInt(localStorage.getItem('g_token_expiry') || '0', 10);
+  gAuthTime = parseInt(localStorage.getItem('g_auth_time') || '0', 10);
 } catch (e) {}
+
+// Session lama (sebelum ada hitungan 24 jam) → mulai hitung dari sekarang
+if (cachedToken && !gAuthTime) gAuthTime = Date.now();
 
 // =====================
 // GOOGLE DRIVE / PICKER
@@ -47,24 +56,82 @@ function getDriveToken(callback) {
     return;
   }
 
+  const withinTtl = gAuthTime > 0 && (Date.now() - gAuthTime) < GOOGLE_AUTH_TTL;
+  const prompt = forceAccountChooser ? 'select_account'
+               : withinTtl ? 'none'   // senyap, tanpa popup
+               : '';                  // login interaktif (lewat 24 jam / pertama kali)
+  requestGoogleToken(prompt, callback, prompt === 'none');
+}
+
+function requestGoogleToken(prompt, callback, canRetry) {
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/drive.readonly',
     callback: (resp) => {
       if (resp.error) {
+        // Token senyap gagal → coba tampilan login biasa
+        if (canRetry) {
+          requestGoogleToken(forceAccountChooser ? 'select_account' : '', callback, false);
+          return;
+        }
         showModal('❌', 'Gagal login Google: ' + resp.error);
         return;
       }
       cachedToken = resp.access_token;
       tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 120) * 1000;
+      if (prompt !== 'none') {
+        gAuthTime = Date.now(); // hanya login interaktif yang me-reset hitungan 24 jam
+        forceAccountChooser = false;
+      }
       try {
         localStorage.setItem('g_access_token', cachedToken);
         localStorage.setItem('g_token_expiry', String(tokenExpiry));
+        localStorage.setItem('g_auth_time', String(gAuthTime));
       } catch (e) {}
       callback(cachedToken);
     }
   });
-  tokenClient.requestAccessToken({ prompt: '' });
+  tokenClient.requestAccessToken({ prompt: prompt });
+}
+
+// =====================
+// ADMIN: STATUS & GANTI AKUN GOOGLE
+// =====================
+function updateGoogleAuthStatus() {
+  const el = document.getElementById('gauth-status');
+  if (!el) return;
+
+  const active = cachedToken && Date.now() < tokenExpiry;
+  const withinTtl = gAuthTime > 0 && (Date.now() - gAuthTime) < GOOGLE_AUTH_TTL;
+
+  if (active || withinTtl) {
+    const until = new Date(gAuthTime + GOOGLE_AUTH_TTL);
+    el.innerHTML = `✅ <strong>Tersambung</strong> — otomatis tanpa login sampai
+      ${until.toLocaleString('id-ID', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+  } else {
+    el.innerHTML = `⚪ <strong>Belum tersambung</strong> — akan diminta login saat pilih foto`;
+  }
+}
+
+function changeGoogleAccount() {
+  if (!confirm('Ganti akun Google untuk akses Drive?\n\nSaat klik "Pilih Foto" berikutnya, jendela pilihan akun Google akan muncul.')) return;
+
+  cachedToken = '';
+  tokenExpiry = 0;
+  gAuthTime = 0;
+  forceAccountChooser = true;
+  try {
+    localStorage.removeItem('g_access_token');
+    localStorage.removeItem('g_token_expiry');
+    localStorage.removeItem('g_auth_time');
+  } catch (e) {}
+
+  updateGoogleAuthStatus();
+  showModal('🔄',
+    'Akun Google dihapus dari website.\n\n' +
+    'Saat klik "📷 Pilih Foto / Folder dari Drive" berikutnya, ' +
+    'pilih akun Google yang diinginkan.'
+  );
 }
 
 function showPicker(token) {
@@ -398,6 +465,7 @@ function openAdmin() {
   document.getElementById('section-gallery').classList.add('hidden');
   document.getElementById('section-admin').classList.remove('hidden');
   renderClientList();
+  updateGoogleAuthStatus();
 }
 
 function adminLogout() {
