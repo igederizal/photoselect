@@ -1058,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       localStorage.removeItem('logged_client_id');
     }
   }
-}
+});
 
 function showToast(message) {
   const el = document.createElement('div');
@@ -1066,4 +1066,4 @@ function showToast(message) {
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);
-});
+}
