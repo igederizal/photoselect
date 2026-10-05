@@ -286,16 +286,18 @@ header .brand-tagline {
 }
 
 .back-btn {
-  background: none;
-  border: 1px solid var(--border);
+  background: #ffffff;
+  border: 1px solid #ffffff;
+  color: #171310;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   margin-bottom: 12px;
   transition: all 0.2s;
 }
-.back-btn:hover { background: var(--bg); }
+.back-btn:hover { background: #e8e2d8; border-color: #e8e2d8; }
 
 .folder-info {
   display: flex;
@@ -454,11 +456,12 @@ header .brand-tagline {
 
 .admin-logout-btn {
   padding: 8px 18px;
-  background: var(--danger);
-  color: white;
+  background: #ffffff;
+  color: #171310;
   border: none;
   border-radius: 6px;
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   transition: opacity 0.2s;
 }
