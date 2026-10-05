@@ -8,6 +8,14 @@ let selectedFiles = [];   // berisi ID foto yang dicentang
 let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 
+// Token Google di-cache (berlaku ±1 jam) supaya tidak login terus
+let cachedToken = '';
+let tokenExpiry = 0;
+try {
+  cachedToken = localStorage.getItem('g_access_token') || '';
+  tokenExpiry = parseInt(localStorage.getItem('g_token_expiry') || '0', 10);
+} catch (e) {}
+
 // =====================
 // GOOGLE DRIVE / PICKER
 // =====================
@@ -25,8 +33,16 @@ function openDrivePicker(clientId) {
   }
 
   pickerTargetId = clientId;
-  const target = clients.find(c => c.id === clientId);
-  if (!target) return;
+
+  getDriveToken(showPicker);
+}
+
+function getDriveToken(callback) {
+  // Pakai token cache kalau masih berlaku — tanpa popup login
+  if (cachedToken && Date.now() < tokenExpiry) {
+    callback(cachedToken);
+    return;
+  }
 
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
@@ -36,10 +52,16 @@ function openDrivePicker(clientId) {
         showModal('❌', 'Gagal login Google: ' + resp.error);
         return;
       }
-      showPicker(resp.access_token);
+      cachedToken = resp.access_token;
+      tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 120) * 1000;
+      try {
+        localStorage.setItem('g_access_token', cachedToken);
+        localStorage.setItem('g_token_expiry', String(tokenExpiry));
+      } catch (e) {}
+      callback(cachedToken);
     }
   });
-  tokenClient.requestAccessToken();
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 function showPicker(token) {
