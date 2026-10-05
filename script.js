@@ -100,7 +100,7 @@ async function listFolderPhotos(folderId, token, out, depth) {
     const url = 'https://www.googleapis.com/drive/v3/files?' +
       new URLSearchParams({
         q: `'${folderId}' in parents and trashed=false`,
-        fields: 'nextPageToken,files(id,name,mimeType)',
+        fields: 'nextPageToken,files(id,name,mimeType,thumbnailLink)',
         pageSize: '1000',
         pageToken: pageToken
       }).toString();
@@ -113,7 +113,7 @@ async function listFolderPhotos(folderId, token, out, depth) {
       if (f.mimeType === 'application/vnd.google-apps.folder') {
         await listFolderPhotos(f.id, token, out, depth + 1);
       } else if (f.mimeType && f.mimeType.startsWith('image/')) {
-        out.push({ id: f.id, name: f.name, thumb: '' });
+        out.push({ id: f.id, name: f.name, thumb: '', thumbLink: f.thumbnailLink || '' });
       }
       if (out.length >= MAX_PHOTOS) break;
     }
@@ -131,6 +131,7 @@ async function onPickerCallback(data) {
 
   const docs = data[google.picker.Response.DOCUMENTS] || [];
   const photos = (target.photos || []).map(p => ({ ...p }));
+  const newOnes = [];
   let added = 0;
 
   showModal('⏳', 'Mengambil foto dari Drive...');
@@ -147,14 +148,15 @@ async function onPickerCallback(data) {
       out.forEach(p => {
         if (!photos.some(x => x.id === p.id) && photos.length < MAX_PHOTOS) {
           photos.push(p);
+          newOnes.push(p);
           added++;
         }
       });
     } else if (d.mimeType && d.mimeType.startsWith('image/')) {
       if (!photos.some(p => p.id === d.id) && photos.length < MAX_PHOTOS) {
-        const thumbs = d.thumbnails || [];
-        const thumb = thumbs.length ? thumbs[thumbs.length - 1].url : '';
-        photos.push({ id: d.id, name: d.name, thumb: thumb });
+        const p = { id: d.id, name: d.name, thumb: '', thumbLink: '' };
+        photos.push(p);
+        newOnes.push(p);
         added++;
       }
     }
@@ -166,9 +168,22 @@ async function onPickerCallback(data) {
     return;
   }
 
+  // Simpan thumbnail ke Supabase Storage supaya client bisa lihat tanpa Google
+  // (termasuk foto lama yang thumb-nya belum pernah tersimpan — re-import jadi perbaikan)
+  const needThumb = photos.filter(p => !p.thumb || !p.thumb.includes('/storage/'));
+  let thumbResult = { ok: 0, fail: 0 };
+  try {
+    thumbResult = await cacheThumbnails(needThumb, pickerToken, target.id);
+  } catch (e) {
+    console.warn('Thumbnail cache error:', e);
+  }
+
+  // Simpan tanpa thumbLink (bersifat sementara)
+  const toSave = photos.map(p => ({ id: p.id, name: p.name, thumb: p.thumb || '' }));
+
   const { error } = await db
     .from('clients')
-    .update({ photos: photos })
+    .update({ photos: toSave })
     .eq('id', target.id);
 
   if (error) {
@@ -176,13 +191,95 @@ async function onPickerCallback(data) {
     return;
   }
 
-  target.photos = photos;
+  target.photos = toSave;
   renderClientList();
   showModal('✅',
     `${added} foto berhasil diposting ke "${target.name}"!\n` +
-    `Total foto: ${photos.length}${photos.length >= MAX_PHOTOS ? ' (maksimal ' + MAX_PHOTOS + ')' : ''}\n\n` +
+    `Total foto: ${toSave.length}${toSave.length >= MAX_PHOTOS ? ' (maksimal ' + MAX_PHOTOS + ')' : ''}\n` +
+    `Thumbnail tersimpan: ${thumbResult.ok} gagal: ${thumbResult.fail}\n\n` +
     `Client sekarang bisa memilih foto ini.`
   );
+}
+
+// =====================
+// SIMPAN THUMBNAIL KE SUPABASE STORAGE
+// =====================
+async function cacheThumbnails(items, token, clientId) {
+  const queue = items.slice();
+  const total = queue.length;
+  if (total === 0) return { ok: 0, fail: 0 };
+
+  let ok = 0, fail = 0;
+  let processed = 0;
+
+  async function nextThumb() {
+    const p = queue.shift();
+    if (!p) return;
+
+    try {
+      // 1. Dapatkan thumbnailLink (short-lived) dari Drive
+      let link = p.thumbLink;
+      if (!link) {
+        const r = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${p.id}?fields=thumbnailLink`,
+          { headers: { Authorization: 'Bearer ' + token } }
+        );
+        const j = await r.json();
+        if (j.error) throw new Error(j.error.message);
+        link = j.thumbnailLink || '';
+      }
+      if (!link) throw new Error('thumbnail tidak tersedia');
+
+      // 2. Download thumbnail (credentialed request)
+      const fr = await fetch(link, { headers: { Authorization: 'Bearer ' + token } });
+      if (!fr.ok) throw new Error('download HTTP ' + fr.status);
+      const blobIn = await fr.blob();
+
+      // 3. Resize jadi pratinjau 1024px (foto asli tetap utuh di Drive)
+      const blob = await resizeBlob(blobIn, 1024);
+
+      // 4. Upload ke Supabase Storage
+      const path = `${clientId}/${p.id}.jpg`;
+      const { error } = await db.storage.from('thumbs')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+
+      const { data: pub } = db.storage.from('thumbs').getPublicUrl(path);
+      p.thumb = pub.publicUrl;
+      p.thumbLink = '';
+      ok++;
+    } catch (e) {
+      console.warn('Gagal thumbnail', p.name, e);
+      fail++;
+    }
+
+    processed++;
+    if (processed % 10 === 0 || processed === total) {
+      showModal('⏳', `Menyimpan thumbnail... ${processed}/${total}`);
+    }
+
+    await nextThumb();
+  }
+
+  await Promise.all([nextThumb(), nextThumb(), nextThumb(), nextThumb()]);
+  return { ok, fail };
+}
+
+async function resizeBlob(blobIn, maxW) {
+  try {
+    const bmp = await createImageBitmap(blobIn);
+    const scale = Math.min(1, maxW / bmp.width);
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    const out = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.8));
+    return out || blobIn;
+  } catch (e) {
+    return blobIn;
+  }
 }
 
 // =====================
@@ -558,6 +655,8 @@ function renderFileGrid() {
     return `
     <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${p.id}" onclick="toggleSelect('${p.id}')">
       <div class="check-mark">✓</div>
+      <button class="zoom-btn" title="Perbesar"
+              onclick="event.stopPropagation(); zoomPhoto('${p.id}')">🔍</button>
       <div class="file-thumb">${thumbHtml}</div>
       <div class="file-info">
         <div class="fname">${p.name}</div>
@@ -565,6 +664,25 @@ function renderFileGrid() {
     </div>
   `;
   }).join('');
+}
+
+// =====================
+// ZOOM FOTO (pratinjau layar penuh)
+// =====================
+function zoomPhoto(fileId) {
+  const p = currentPhotos.find(x => x.id === fileId);
+  if (!p) return;
+
+  const src = p.thumb || ('https://drive.google.com/thumbnail?id=' + p.id + '&sz=w1024');
+  document.getElementById('zoom-img').src = src;
+  document.getElementById('zoom-name').textContent = p.name;
+  document.getElementById('zoom-overlay').classList.remove('hidden');
+}
+
+function closeZoom() {
+  const overlay = document.getElementById('zoom-overlay');
+  overlay.classList.add('hidden');
+  document.getElementById('zoom-img').src = '';
 }
 
 // =====================
