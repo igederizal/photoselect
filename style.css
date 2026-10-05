@@ -367,19 +367,6 @@ header .brand-tagline {
   text-align: center;
 }
 
-.download-btn {
-  padding: 12px 30px;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.download-btn:hover { background: var(--primary-dark); }
-
 /* MODAL */
 .modal-overlay {
   position: fixed;

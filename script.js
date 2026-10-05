@@ -1036,11 +1036,6 @@ function viewFile(name, size) {
   showModal('🖼️', `${name}\nUkuran: ${size}`);
 }
 
-function downloadAll() {
-  if (!currentClient) return;
-  showModal('📥', `Download semua file dari folder "${currentClient.folder}"\n\n*(Demo)*`);
-}
-
 // =====================
 // LOGOUT (client)
 // =====================
