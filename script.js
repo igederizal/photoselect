@@ -744,6 +744,24 @@ async function copySelectedToDrive(clientId) {
 }
 
 // =====================
+// ADMIN: BATAS FOTO DIPILIH
+// =====================
+async function setMaxSelect(id, val) {
+  const client = clients.find(c => c.id === id);
+  if (!client) return;
+  let n = parseInt(val, 10);
+  if (isNaN(n) || n < 0) n = 0;
+
+  const { error } = await db.from('clients').update({ max_select: n }).eq('id', id);
+  if (error) {
+    showToast('Gagal simpan batas foto');
+    return;
+  }
+  client.max_select = n;
+  showToast(n > 0 ? `Batas disimpan: maksimal ${n} foto dipilih` : 'Batas dilepas (tanpa batas)');
+}
+
+// =====================
 // ADMIN: RENDER LIST
 // =====================
 function renderClientList() {
@@ -786,6 +804,14 @@ function renderClientList() {
           <button class="status-btn s-diproses" onclick="changeStatus(${client.id}, 'Diproses')">Diproses</button>
           <button class="status-btn s-selesai" onclick="changeStatus(${client.id}, 'Selesai')">Selesai</button>
         </div>
+      </div>
+
+      <div class="limit-row">
+        <span>Maks. foto dipilih</span>
+        <input type="number" min="0" value="${client.max_select || 0}"
+               onchange="setMaxSelect(${client.id}, this.value)"
+               title="Isi 0 untuk tanpa batas">
+        <span class="limit-hint">0 = tanpa batas</span>
       </div>
 
       <div class="photo-actions">
@@ -929,6 +955,11 @@ function toggleSelect(fileId) {
   if (idx >= 0) {
     selectedFiles.splice(idx, 1);
   } else {
+    const max = (currentClient && currentClient.max_select) || 0;
+    if (max > 0 && selectedFiles.length >= max) {
+      showModal('⚠️', `Maksimal ${max} foto yang bisa dipilih.\n\nBatalkan salah satu pilihan dulu untuk mengganti.`);
+      return;
+    }
     selectedFiles.push(fileId);
   }
 
@@ -938,20 +969,12 @@ function toggleSelect(fileId) {
   updateSelectCount();
 }
 
-function toggleSelectAll() {
-  const allIds = currentPhotos.map(p => p.id);
-
-  if (allIds.length > 0 && selectedFiles.length === allIds.length) {
-    selectedFiles = [];
-  } else {
-    selectedFiles = [...allIds];
-  }
-  renderFileGrid();
-  updateSelectCount();
-}
-
 function updateSelectCount() {
-  document.getElementById('select-count').textContent = `${selectedFiles.length} foto dipilih`;
+  const max = (currentClient && currentClient.max_select) || 0;
+  const label = max > 0
+    ? `${selectedFiles.length} / ${max} foto dipilih`
+    : `${selectedFiles.length} foto dipilih`;
+  document.getElementById('select-count').textContent = label;
 }
 
 // =====================
@@ -962,6 +985,12 @@ async function submitSelection() {
 
   if (selectedFiles.length === 0) {
     showModal('⚠️', 'Pilih minimal 1 foto dulu sebelum kirim!');
+    return;
+  }
+
+  const maxSel = (currentClient && currentClient.max_select) || 0;
+  if (maxSel > 0 && selectedFiles.length > maxSel) {
+    showModal('⚠️', `Batas maksimal ${maxSel} foto.\n\nKurangi pilihan Anda dulu sebelum kirim.`);
     return;
   }
 

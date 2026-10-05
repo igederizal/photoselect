@@ -535,16 +535,28 @@ header .brand-tagline {
   font-weight: 600;
   color: var(--text);
 }
-.select-all-btn {
-  padding: 6px 14px;
-  background: var(--bg);
+
+/* Batas foto dipilih (aturan admin) */
+.limit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text2);
+  flex-wrap: wrap;
+}
+.limit-row input {
+  width: 74px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
+  outline: none;
+  text-align: center;
 }
-.select-all-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+.limit-row input:focus { border-color: var(--primary); }
+.limit-hint { font-size: 11px; opacity: 0.75; }
 
 .select-actions {
   display: flex;
