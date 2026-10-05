@@ -6,6 +6,7 @@ let currentClient = null;
 let adminPassword = 'admin123';
 let selectedFiles = [];   // berisi ID foto yang dicentang
 let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
+let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 
 // =====================
 // GOOGLE DRIVE / PICKER
@@ -13,7 +14,7 @@ let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 const GOOGLE_CLIENT_ID = '382982310484-l959cia5bpim0gj61tecij34q4k1sc5q.apps.googleusercontent.com';
 const GOOGLE_API_KEY = 'AIzaSyAJRLdv3VKWh3EP1WiZxYUqE9rDYSaAAik';
 
-function openDrivePicker() {
+function openDrivePicker(clientId) {
   if (!GOOGLE_API_KEY) {
     showModal('⚠️', 'API key Google belum diisi di script.js');
     return;
@@ -22,6 +23,10 @@ function openDrivePicker() {
     showModal('⚠️', 'Google API belum termuat. Muat ulang halaman lalu coba lagi.');
     return;
   }
+
+  pickerTargetId = clientId;
+  const target = clients.find(c => c.id === clientId);
+  if (!target) return;
 
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
@@ -56,28 +61,48 @@ function buildPicker(token) {
   picker.setVisible(true);
 }
 
-function onPickerCallback(data) {
+async function onPickerCallback(data) {
   if (data.action !== google.picker.Action.PICKED) return;
 
+  const target = clients.find(c => c.id === pickerTargetId);
+  if (!target) return;
+
   const docs = data[google.picker.Response.DOCUMENTS] || [];
+  const photos = (target.photos || []).map(p => ({ ...p }));
   let added = 0;
 
   docs.forEach(d => {
     if (d.mimeType && !d.mimeType.startsWith('image/')) return;
-    if (currentPhotos.some(p => p.id === d.id)) return;
+    if (photos.some(p => p.id === d.id)) return;
 
     const thumbs = d.thumbnails || [];
     const thumb = thumbs.length ? thumbs[thumbs.length - 1].url : '';
-    currentPhotos.push({ id: d.id, name: d.name, thumb: thumb });
-    if (!selectedFiles.includes(d.id)) selectedFiles.push(d.id);
+    photos.push({ id: d.id, name: d.name, thumb: thumb });
     added++;
   });
 
   if (added === 0) {
     showModal('ℹ️', 'Tidak ada foto baru yang dipilih.');
+    return;
   }
-  renderFileGrid();
-  updateSelectCount();
+
+  const { error } = await db
+    .from('clients')
+    .update({ photos: photos })
+    .eq('id', target.id);
+
+  if (error) {
+    showModal('❌', 'Gagal simpan foto: ' + error.message);
+    return;
+  }
+
+  target.photos = photos;
+  renderClientList();
+  showModal('✅',
+    `${added} foto berhasil diposting ke "${target.name}"!\n` +
+    `Total foto: ${photos.length}\n\n` +
+    `Client sekarang bisa memilih foto ini.`
+  );
 }
 
 // =====================
@@ -291,6 +316,28 @@ async function changeStatus(id, newStatus) {
 }
 
 // =====================
+// ADMIN: KOSONGKAN FOTO CLIENT
+// =====================
+async function clearClientPhotos(id) {
+  const client = clients.find(c => c.id === id);
+  if (!client) return;
+  if (!confirm(`Kosongkan semua foto untuk "${client.name}"?`)) return;
+
+  const { error } = await db
+    .from('clients')
+    .update({ photos: [] })
+    .eq('id', id);
+
+  if (error) {
+    alert('Gagal mengosongkan foto!');
+    return;
+  }
+
+  client.photos = [];
+  renderClientList();
+}
+
+// =====================
 // ADMIN: RENDER LIST
 // =====================
 function renderClientList() {
@@ -305,6 +352,7 @@ function renderClientList() {
     const statusClass = 'status-' + client.status.toLowerCase();
     const files = client.selected_files || [];
     const fileNames = files.map(f => (typeof f === 'string' ? f : f.name));
+    const photoCount = (client.photos || []).length;
     const selectedInfo = client.submitted && files.length > 0
       ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${fileNames.join(', ')}</div>`
       : '';
@@ -332,6 +380,12 @@ function renderClientList() {
           <button class="status-btn s-diproses" onclick="changeStatus(${client.id}, 'Diproses')">Diproses</button>
           <button class="status-btn s-selesai" onclick="changeStatus(${client.id}, 'Selesai')">Selesai</button>
         </div>
+      </div>
+
+      <div class="photo-actions">
+        <button class="drive-btn" onclick="openDrivePicker(${client.id})">📷 Pilih Foto dari Drive</button>
+        <span class="photo-count">🎞️ ${photoCount} foto diposting</span>
+        ${photoCount > 0 ? `<button class="clear-photo-btn" onclick="clearClientPhotos(${client.id})">Kosongkan</button>` : ''}
       </div>
 
       ${selectedInfo}
@@ -384,12 +438,14 @@ function showGallery(client) {
   statusEl.textContent = `Status: ${client.status}`;
   statusEl.className = 'status-badge status-' + client.status.toLowerCase();
 
-  // Bangun pool foto dari pilihan tersimpan di Supabase
+  // Pool foto = yang diposting admin
+  const photos = client.photos || [];
+  currentPhotos = photos.map(p => ({ ...p }));
+
+  // Pilihan tersimpan client (hanya yang masih ada di pool)
   const saved = client.selected_files || [];
-  currentPhotos = saved.map(f => (typeof f === 'string'
-    ? { id: f, name: f, thumb: '' }
-    : f));
-  selectedFiles = currentPhotos.map(p => p.id);
+  const savedIds = saved.map(f => (typeof f === 'string' ? f : f.id));
+  selectedFiles = savedIds.filter(id => currentPhotos.some(p => p.id === id));
 
   document.getElementById('client-note').value = client.note || '';
 
@@ -407,8 +463,7 @@ function renderFileGrid() {
     grid.innerHTML = `
       <div class="empty-grid">
         <span class="empty-icon">📷</span>
-        <p>Belum ada foto. Klik tombol di bawah untuk memilih foto dari Google Drive Anda.</p>
-        <button onclick="openDrivePicker()" class="drive-btn">📷 Pilih dari Google Drive</button>
+        <p>Belum ada foto di galeri ini.<br>Admin belum memposting foto untuk project Anda.</p>
       </div>`;
     return;
   }

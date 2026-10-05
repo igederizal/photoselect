@@ -518,6 +518,32 @@ header p { color: var(--text2); font-size: 14px; }
 }
 .drive-btn:hover { background: #1557b0; }
 
+.photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.photo-count {
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 500;
+}
+.clear-photo-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--danger, #e74c3c);
+  color: var(--danger, #e74c3c);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.clear-photo-btn:hover { background: var(--danger, #e74c3c); color: white; }
+
 .empty-grid {
   grid-column: 1 / -1;
   text-align: center;
