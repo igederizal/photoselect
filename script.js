@@ -202,66 +202,86 @@ async function onPickerCallback(data) {
 }
 
 // =====================
-// SIMPAN THUMBNAIL KE SUPABASE STORAGE
+// SIMPAN THUMBNAIL KE SUPABASE STORAGE (via server /api/thumb)
 // =====================
 async function cacheThumbnails(items, token, clientId) {
-  const queue = items.slice();
-  const total = queue.length;
+  const total = items.length;
   if (total === 0) return { ok: 0, fail: 0 };
 
   let ok = 0, fail = 0;
   let processed = 0;
+  let useDirect = false; // fallback langsung (untuk localhost tanpa server Vercel)
+  const BATCH = 40;
 
-  async function nextThumb() {
-    const p = queue.shift();
-    if (!p) return;
+  for (let i = 0; i < total; i += BATCH) {
+    const chunk = items.slice(i, i + BATCH);
+    let results = null;
 
-    try {
-      // 1. Dapatkan thumbnailLink (short-lived) dari Drive
-      let link = p.thumbLink;
-      if (!link) {
-        const r = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${p.id}?fields=thumbnailLink`,
-          { headers: { Authorization: 'Bearer ' + token } }
-        );
-        const j = await r.json();
-        if (j.error) throw new Error(j.error.message);
-        link = j.thumbnailLink || '';
+    if (!useDirect) {
+      try {
+        const resp = await fetch('/api/thumb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, clientId: clientId, ids: chunk.map(p => p.id) })
+        });
+        if (resp.status === 404) {
+          useDirect = true; // tidak ada server (mis. localhost) → proses langsung
+        } else if (resp.ok) {
+          const j = await resp.json();
+          results = j.results || [];
+        } else {
+          const j = await resp.json().catch(() => ({}));
+          throw new Error(j.error || ('server HTTP ' + resp.status));
+        }
+      } catch (e) {
+        if (!useDirect) {
+          console.warn('api/thumb tidak terjangkau, fallback langsung:', e);
+          useDirect = true;
+        }
       }
-      if (!link) throw new Error('thumbnail tidak tersedia');
-
-      // 2. Download thumbnail (credentialed request)
-      const fr = await fetch(link, { headers: { Authorization: 'Bearer ' + token } });
-      if (!fr.ok) throw new Error('download HTTP ' + fr.status);
-      const blobIn = await fr.blob();
-
-      // 3. Resize jadi pratinjau 1024px (foto asli tetap utuh di Drive)
-      const blob = await resizeBlob(blobIn, 1024);
-
-      // 4. Upload ke Supabase Storage
-      const path = `${clientId}/${p.id}.jpg`;
-      const { error } = await db.storage.from('thumbs')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-      if (error) throw error;
-
-      const { data: pub } = db.storage.from('thumbs').getPublicUrl(path);
-      p.thumb = pub.publicUrl;
-      p.thumbLink = '';
-      ok++;
-    } catch (e) {
-      console.warn('Gagal thumbnail', p.name, e);
-      fail++;
     }
 
-    processed++;
-    if (processed % 10 === 0 || processed === total) {
-      showModal('⏳', `Menyimpan thumbnail... ${processed}/${total}`);
+    if (results) {
+      results.forEach(r => {
+        const p = chunk.find(x => x.id === r.id);
+        if (p && r.ok) {
+          p.thumb = r.url;
+          p.thumbLink = '';
+          ok++;
+        } else {
+          fail++;
+        }
+        processed++;
+      });
+    } else {
+      // Fallback: download via googleapis (CORS aman) → resize di browser → upload
+      for (const p of chunk) {
+        try {
+          const r = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${p.id}?alt=media`,
+            { headers: { Authorization: 'Bearer ' + token } }
+          );
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const blob = await resizeBlob(await r.blob(), 1024);
+          const path = `${clientId}/${p.id}.jpg`;
+          const { error } = await db.storage.from('thumbs')
+            .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+          if (error) throw error;
+          const { data: pub } = db.storage.from('thumbs').getPublicUrl(path);
+          p.thumb = pub.publicUrl;
+          p.thumbLink = '';
+          ok++;
+        } catch (e) {
+          console.warn('Gagal thumbnail', p.name, e);
+          fail++;
+        }
+        processed++;
+      }
     }
 
-    await nextThumb();
+    showModal('⏳', `Menyimpan thumbnail... ${processed}/${total}`);
   }
 
-  await Promise.all([nextThumb(), nextThumb(), nextThumb(), nextThumb()]);
   return { ok, fail };
 }
 

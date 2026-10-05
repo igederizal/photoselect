@@ -2,6 +2,11 @@
   "buildCommand": null,
   "outputDirectory": ".",
   "cleanUrls": true,
+  "functions": {
+    "api/thumb.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/", "destination": "/index.html" }
   ]
