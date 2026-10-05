@@ -7,6 +7,8 @@ let adminPassword = 'admin123';
 let selectedFiles = [];   // berisi ID foto yang dicentang
 let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
+let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
+const MAX_PHOTOS = 5000;    // batas foto per client
 
 // Token Google di-cache (berlaku ±1 jam) supaya tidak login terus
 let cachedToken = '';
@@ -33,6 +35,7 @@ function openDrivePicker(clientId) {
   }
 
   pickerTargetId = clientId;
+  pickerToken = '';
 
   getDriveToken(showPicker);
 }
@@ -65,22 +68,59 @@ function getDriveToken(callback) {
 }
 
 function showPicker(token) {
+  pickerToken = token;
   gapi.load('picker', { callback: () => buildPicker(token) });
 }
 
 function buildPicker(token) {
-  const docsView = new google.picker.DocsView()
+  const filesView = new google.picker.DocsView()
     .setMimeTypes('image/jpeg,image/png,image/webp,image/gif,image/heic');
+
+  const foldersView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    .setSelectFolderEnabled(true);
 
   const picker = new google.picker.PickerBuilder()
     .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-    .setTitle('Pilih Foto dari Drive Anda')
+    .setTitle('Pilih foto atau folder (semua foto dalam folder akan diambil)')
     .setOAuthToken(token)
     .setDeveloperKey(GOOGLE_API_KEY)
-    .addView(docsView)
+    .addView(filesView)
+    .addView(foldersView)
     .setCallback(onPickerCallback)
     .build();
   picker.setVisible(true);
+}
+
+// Ambil semua foto dalam satu folder (rekursif ke subfolder)
+async function listFolderPhotos(folderId, token, out, depth) {
+  if (out.length >= MAX_PHOTOS || depth > 4) return;
+
+  let pageToken = '';
+  do {
+    const url = 'https://www.googleapis.com/drive/v3/files?' +
+      new URLSearchParams({
+        q: `'${folderId}' in parents and trashed=false`,
+        fields: 'nextPageToken,files(id,name,mimeType)',
+        pageSize: '1000',
+        pageToken: pageToken
+      }).toString();
+
+    const resp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+
+    for (const f of (data.files || [])) {
+      if (f.mimeType === 'application/vnd.google-apps.folder') {
+        await listFolderPhotos(f.id, token, out, depth + 1);
+      } else if (f.mimeType && f.mimeType.startsWith('image/')) {
+        out.push({ id: f.id, name: f.name, thumb: '' });
+      }
+      if (out.length >= MAX_PHOTOS) break;
+    }
+
+    showModal('⏳', `Mengambil foto dari Drive... ${out.length} foto`);
+    pageToken = data.nextPageToken || '';
+  } while (pageToken && out.length < MAX_PHOTOS);
 }
 
 async function onPickerCallback(data) {
@@ -93,15 +133,33 @@ async function onPickerCallback(data) {
   const photos = (target.photos || []).map(p => ({ ...p }));
   let added = 0;
 
-  docs.forEach(d => {
-    if (d.mimeType && !d.mimeType.startsWith('image/')) return;
-    if (photos.some(p => p.id === d.id)) return;
+  showModal('⏳', 'Mengambil foto dari Drive...');
 
-    const thumbs = d.thumbnails || [];
-    const thumb = thumbs.length ? thumbs[thumbs.length - 1].url : '';
-    photos.push({ id: d.id, name: d.name, thumb: thumb });
-    added++;
-  });
+  for (const d of docs) {
+    if (d.mimeType === 'application/vnd.google-apps.folder') {
+      const out = [];
+      try {
+        await listFolderPhotos(d.id, pickerToken, out, 0);
+      } catch (e) {
+        showModal('❌', 'Gagal membaca folder: ' + e.message);
+        return;
+      }
+      out.forEach(p => {
+        if (!photos.some(x => x.id === p.id) && photos.length < MAX_PHOTOS) {
+          photos.push(p);
+          added++;
+        }
+      });
+    } else if (d.mimeType && d.mimeType.startsWith('image/')) {
+      if (!photos.some(p => p.id === d.id) && photos.length < MAX_PHOTOS) {
+        const thumbs = d.thumbnails || [];
+        const thumb = thumbs.length ? thumbs[thumbs.length - 1].url : '';
+        photos.push({ id: d.id, name: d.name, thumb: thumb });
+        added++;
+      }
+    }
+    if (photos.length >= MAX_PHOTOS) break;
+  }
 
   if (added === 0) {
     showModal('ℹ️', 'Tidak ada foto baru yang dipilih.');
@@ -122,7 +180,7 @@ async function onPickerCallback(data) {
   renderClientList();
   showModal('✅',
     `${added} foto berhasil diposting ke "${target.name}"!\n` +
-    `Total foto: ${photos.length}\n\n` +
+    `Total foto: ${photos.length}${photos.length >= MAX_PHOTOS ? ' (maksimal ' + MAX_PHOTOS + ')' : ''}\n\n` +
     `Client sekarang bisa memilih foto ini.`
   );
 }
@@ -405,7 +463,7 @@ function renderClientList() {
       </div>
 
       <div class="photo-actions">
-        <button class="drive-btn" onclick="openDrivePicker(${client.id})">📷 Pilih Foto dari Drive</button>
+        <button class="drive-btn" onclick="openDrivePicker(${client.id})">📷 Pilih Foto / Folder dari Drive</button>
         <span class="photo-count">🎞️ ${photoCount} foto diposting</span>
         ${photoCount > 0 ? `<button class="clear-photo-btn" onclick="clearClientPhotos(${client.id})">Kosongkan</button>` : ''}
       </div>
@@ -498,7 +556,7 @@ function renderFileGrid() {
                onerror="this.onerror=null;this.src='${fallback}'">`
       : '📷';
     return `
-    <div class="file-card ${isSelected ? 'selected' : ''}" onclick="toggleSelect('${p.id}')">
+    <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${p.id}" onclick="toggleSelect('${p.id}')">
       <div class="check-mark">✓</div>
       <div class="file-thumb">${thumbHtml}</div>
       <div class="file-info">
@@ -519,7 +577,10 @@ function toggleSelect(fileId) {
   } else {
     selectedFiles.push(fileId);
   }
-  renderFileGrid();
+
+  // Update kartu saja (tanpa render ulang — cepat untuk ribuan foto)
+  const card = document.querySelector(`.file-card[data-id="${fileId}"]`);
+  if (card) card.classList.toggle('selected', selectedFiles.includes(fileId));
   updateSelectCount();
 }
 
