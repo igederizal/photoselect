@@ -236,6 +236,7 @@ async function cacheThumbnails(items, token, clientId) {
           throw new Error(j.error || ('server HTTP ' + resp.status));
         }
       } catch (e) {
+        if (!firstError) firstError = 'api/thumb: ' + String(e.message || e);
         if (!useDirect) {
           console.warn('api/thumb tidak terjangkau, fallback langsung:', e);
           useDirect = true;
@@ -276,6 +277,7 @@ async function cacheThumbnails(items, token, clientId) {
           p.thumbLink = '';
           ok++;
         } catch (e) {
+          if (!firstError) firstError = 'direct: ' + String(e.message || e);
           console.warn('Gagal thumbnail', p.name, e);
           fail++;
         }
