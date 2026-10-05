@@ -44,7 +44,7 @@ if (cachedToken && !gAuthTime) gAuthTime = Date.now();
 // =====================
 // GOOGLE DRIVE / PICKER
 // =====================
-const GOOGLE_CLIENT_ID = '382982310484-l959cia5bpim0gj61tecij34q4k1sc5q.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '382982310484-vjlock63pis42qe559rk04ie5uikj27s.apps.googleusercontent.com';
 const GOOGLE_API_KEY = 'AIzaSyAJRLdv3VKWh3EP1WiZxYUqE9rDYSaAAik';
 
 function openDrivePicker(clientId) {
