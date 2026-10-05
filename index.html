@@ -88,7 +88,10 @@
 
       <div class="select-bar">
         <span id="select-count">0 foto dipilih</span>
-        <button onclick="toggleSelectAll()" class="select-all-btn">Pilih Semua</button>
+        <div class="select-actions">
+          <button onclick="openDrivePicker()" class="drive-btn">📷 Pilih dari Google Drive</button>
+          <button onclick="toggleSelectAll()" class="select-all-btn">Pilih Semua</button>
+        </div>
       </div>
 
       <div id="file-grid" class="file-grid"></div>
@@ -114,6 +117,8 @@
     </div>
   </div>
 
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="script.js"></script>

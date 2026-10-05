@@ -4,22 +4,80 @@
 let clients = [];
 let currentClient = null;
 let adminPassword = 'admin123';
-let selectedFiles = [];
+let selectedFiles = [];   // berisi ID foto yang dicentang
+let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 
 // =====================
-// MOCK FILES
+// GOOGLE DRIVE / PICKER
 // =====================
-function getFilesForClient(clientId) {
-  const fileTemplates = [
-    { name: 'foto_001.jpg', size: '3.2 MB', color: '#e74c3c', icon: '📷' },
-    { name: 'foto_002.jpg', size: '4.1 MB', color: '#3498db', icon: '📷' },
-    { name: 'video_001.mp4', size: '15.8 MB', color: '#9b59b6', icon: '🎥' },
-    { name: 'foto_003.jpg', size: '2.5 MB', color: '#2ecc71', icon: '📷' },
-    { name: 'foto_004.jpg', size: '1.1 MB', color: '#f39c12', icon: '📷' },
-    { name: 'thumbnail.png', size: '0.8 MB', color: '#1abc9c', icon: '🖼️' }
-  ];
-  const count = (clientId * 3) % 4 + 3;
-  return fileTemplates.slice(0, count);
+const GOOGLE_CLIENT_ID = '382982310484-l959cia5bpim0gj61tecij34q4k1sc5q.apps.googleusercontent.com';
+const GOOGLE_API_KEY = 'AIzaSyAJRLdv3VKWh3EP1WiZxYUqE9rDYSaAAik';
+
+function openDrivePicker() {
+  if (!GOOGLE_API_KEY) {
+    showModal('⚠️', 'API key Google belum diisi di script.js');
+    return;
+  }
+  if (!window.google || !google.accounts || !google.accounts.oauth2) {
+    showModal('⚠️', 'Google API belum termuat. Muat ulang halaman lalu coba lagi.');
+    return;
+  }
+
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    callback: (resp) => {
+      if (resp.error) {
+        showModal('❌', 'Gagal login Google: ' + resp.error);
+        return;
+      }
+      showPicker(resp.access_token);
+    }
+  });
+  tokenClient.requestAccessToken();
+}
+
+function showPicker(token) {
+  gapi.load('picker', { callback: () => buildPicker(token) });
+}
+
+function buildPicker(token) {
+  const docsView = new google.picker.DocsView()
+    .setMimeTypes('image/jpeg,image/png,image/webp,image/gif,image/heic');
+
+  const picker = new google.picker.PickerBuilder()
+    .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+    .setTitle('Pilih Foto dari Drive Anda')
+    .setOAuthToken(token)
+    .setDeveloperKey(GOOGLE_API_KEY)
+    .addView(docsView)
+    .setCallback(onPickerCallback)
+    .build();
+  picker.setVisible(true);
+}
+
+function onPickerCallback(data) {
+  if (data.action !== google.picker.Action.PICKED) return;
+
+  const docs = data[google.picker.Response.DOCUMENTS] || [];
+  let added = 0;
+
+  docs.forEach(d => {
+    if (d.mimeType && !d.mimeType.startsWith('image/')) return;
+    if (currentPhotos.some(p => p.id === d.id)) return;
+
+    const thumbs = d.thumbnails || [];
+    const thumb = thumbs.length ? thumbs[thumbs.length - 1].url : '';
+    currentPhotos.push({ id: d.id, name: d.name, thumb: thumb });
+    if (!selectedFiles.includes(d.id)) selectedFiles.push(d.id);
+    added++;
+  });
+
+  if (added === 0) {
+    showModal('ℹ️', 'Tidak ada foto baru yang dipilih.');
+  }
+  renderFileGrid();
+  updateSelectCount();
 }
 
 // =====================
@@ -246,8 +304,9 @@ function renderClientList() {
   container.innerHTML = clients.map(client => {
     const statusClass = 'status-' + client.status.toLowerCase();
     const files = client.selected_files || [];
+    const fileNames = files.map(f => (typeof f === 'string' ? f : f.name));
     const selectedInfo = client.submitted && files.length > 0
-      ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${files.join(', ')}</div>`
+      ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${fileNames.join(', ')}</div>`
       : '';
     const noteInfo = client.note
       ? `<div class="note-box">📝 ${client.note}</div>`
@@ -325,29 +384,48 @@ function showGallery(client) {
   statusEl.textContent = `Status: ${client.status}`;
   statusEl.className = 'status-badge status-' + client.status.toLowerCase();
 
-  selectedFiles = client.selected_files || [];
+  // Bangun pool foto dari pilihan tersimpan di Supabase
+  const saved = client.selected_files || [];
+  currentPhotos = saved.map(f => (typeof f === 'string'
+    ? { id: f, name: f, thumb: '' }
+    : f));
+  selectedFiles = currentPhotos.map(p => p.id);
+
   document.getElementById('client-note').value = client.note || '';
 
-  renderFileGrid(client);
+  renderFileGrid();
   updateSelectCount();
 }
 
 // =====================
 // RENDER FILE GRID + CHECKBOX
 // =====================
-function renderFileGrid(client) {
-  const files = getFilesForClient(client.id);
+function renderFileGrid() {
   const grid = document.getElementById('file-grid');
 
-  grid.innerHTML = files.map(f => {
-    const isSelected = selectedFiles.includes(f.name);
+  if (currentPhotos.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-grid">
+        <span class="empty-icon">📷</span>
+        <p>Belum ada foto. Klik tombol di bawah untuk memilih foto dari Google Drive Anda.</p>
+        <button onclick="openDrivePicker()" class="drive-btn">📷 Pilih dari Google Drive</button>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = currentPhotos.map(p => {
+    const isSelected = selectedFiles.includes(p.id);
+    const fallback = 'https://drive.google.com/thumbnail?id=' + p.id + '&sz=w400';
+    const thumbHtml = p.thumb || p.id
+      ? `<img src="${p.thumb || fallback}" alt="${p.name}" loading="lazy"
+               onerror="this.onerror=null;this.src='${fallback}'">`
+      : '📷';
     return `
-    <div class="file-card ${isSelected ? 'selected' : ''}" onclick="toggleSelect('${f.name}')">
+    <div class="file-card ${isSelected ? 'selected' : ''}" onclick="toggleSelect('${p.id}')">
       <div class="check-mark">✓</div>
-      <div class="file-thumb" style="background:${f.color}">${f.icon}</div>
+      <div class="file-thumb">${thumbHtml}</div>
       <div class="file-info">
-        <div class="fname">${f.name}</div>
-        <div class="fsize">${f.size}</div>
+        <div class="fname">${p.name}</div>
       </div>
     </div>
   `;
@@ -357,27 +435,26 @@ function renderFileGrid(client) {
 // =====================
 // TOGGLE PILIH FOTO
 // =====================
-function toggleSelect(fileName) {
-  const idx = selectedFiles.indexOf(fileName);
+function toggleSelect(fileId) {
+  const idx = selectedFiles.indexOf(fileId);
   if (idx >= 0) {
     selectedFiles.splice(idx, 1);
   } else {
-    selectedFiles.push(fileName);
+    selectedFiles.push(fileId);
   }
-  renderFileGrid(currentClient);
+  renderFileGrid();
   updateSelectCount();
 }
 
 function toggleSelectAll() {
-  const files = getFilesForClient(currentClient.id);
-  const allNames = files.map(f => f.name);
+  const allIds = currentPhotos.map(p => p.id);
 
-  if (selectedFiles.length === allNames.length) {
+  if (allIds.length > 0 && selectedFiles.length === allIds.length) {
     selectedFiles = [];
   } else {
-    selectedFiles = [...allNames];
+    selectedFiles = [...allIds];
   }
-  renderFileGrid(currentClient);
+  renderFileGrid();
   updateSelectCount();
 }
 
@@ -398,10 +475,12 @@ async function submitSelection() {
 
   const note = document.getElementById('client-note').value.trim();
 
+  const chosen = currentPhotos.filter(p => selectedFiles.includes(p.id));
+
   const { error } = await db
     .from('clients')
     .update({
-      selected_files: [...selectedFiles],
+      selected_files: chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb })),
       note: note,
       submitted: true
     })
@@ -414,7 +493,7 @@ async function submitSelection() {
   }
 
   // Update state lokal
-  currentClient.selected_files = [...selectedFiles];
+  currentClient.selected_files = chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb }));
   currentClient.note = note;
   currentClient.submitted = true;
 
@@ -423,7 +502,7 @@ async function submitSelection() {
 
   showModal('✅',
     `Pilihan berhasil dikirim!\n\n` +
-    `${selectedFiles.length} foto terpilih\n` +
+    `${chosen.length} foto terpilih\n` +
     `Catatan: ${note || '(tidak ada)'}\n\n` +
     `Admin akan melihat pilihan Anda.`
   );
@@ -447,6 +526,7 @@ function downloadAll() {
 function logout() {
   currentClient = null;
   selectedFiles = [];
+  currentPhotos = [];
   localStorage.removeItem('logged_client_id');
   document.getElementById('client-password').value = '';
   document.getElementById('section-gallery').classList.add('hidden');

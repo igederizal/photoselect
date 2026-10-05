@@ -499,6 +499,51 @@ header p { color: var(--text2); font-size: 14px; }
 }
 .select-all-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
 
+.select-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.drive-btn {
+  padding: 8px 16px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.drive-btn:hover { background: #1557b0; }
+
+.empty-grid {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 50px 20px;
+  background: var(--card);
+  border-radius: 12px;
+  border: 2px dashed var(--border);
+}
+.empty-grid .empty-icon { font-size: 44px; display: block; margin-bottom: 10px; }
+.empty-grid p { color: var(--text2); margin-bottom: 18px; font-size: 14px; }
+
+.file-thumb {
+  height: 0;
+  padding-bottom: 75%;
+  position: relative;
+  background: var(--bg);
+}
+.file-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .file-card { position: relative; }
 .file-card.selected {
   outline: 3px solid var(--success);
