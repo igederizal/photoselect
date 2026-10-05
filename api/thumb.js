@@ -22,9 +22,9 @@ async function processOne(fileId, token, clientId) {
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    // 3. Upload ke Supabase Storage
+    // 3. Upload ke Supabase Storage (bucket: thumbs)
     const path = `${clientId}/${fileId}.jpg`;
-    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/${path}`, {
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/thumbs/${path}`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_KEY,
@@ -41,7 +41,7 @@ async function processOne(fileId, token, clientId) {
     return {
       id: fileId,
       ok: true,
-      url: `${SUPABASE_URL}/storage/v1/object/public/${path}`
+      url: `${SUPABASE_URL}/storage/v1/object/public/thumbs/${path}`
     };
   } catch (e) {
     console.error('thumb fail', fileId, e);
