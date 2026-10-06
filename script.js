@@ -3,13 +3,50 @@
 // =====================
 let clients = [];
 let currentClient = null;
-let adminPassword = 'admin123';
 let selectedFiles = [];   // berisi ID foto yang dicentang
 let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
 const MAX_PHOTOS = 5000;    // batas foto per client
 const GOOGLE_AUTH_TTL = 24 * 60 * 60 * 1000; // login Google admin berlaku 24 jam
+
+// =====================
+// SESI (token dari server - password tidak pernah disimpan di browser)
+// =====================
+let adminToken = localStorage.getItem('mh_admin_token') || '';
+let clientToken = localStorage.getItem('mh_client_token') || '';
+
+async function api(action, payload = {}) {
+  const token = action.startsWith('admin_') ? adminToken : clientToken;
+  const resp = await fetch('/api/app', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: action, token: token, ...payload })
+  });
+  const j = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(j.error || ('HTTP ' + resp.status));
+  return j;
+}
+
+function clearAdminSession() {
+  adminToken = '';
+  localStorage.removeItem('mh_admin_token');
+}
+
+function clearClientSession() {
+  clientToken = '';
+  localStorage.removeItem('mh_client_token');
+  currentClient = null;
+  selectedFiles = [];
+  currentPhotos = [];
+}
+
+// Escape HTML: nama/catatan client tidak boleh jadi kode
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
 
 // Izin Drive: baca semua + buat folder + salin file (untuk fitur folder terpilih)
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
@@ -263,13 +300,10 @@ async function onPickerCallback(data) {
   // Simpan tanpa thumbLink (bersifat sementara)
   const toSave = photos.map(p => ({ id: p.id, name: p.name, thumb: p.thumb || '' }));
 
-  const { error } = await db
-    .from('clients')
-    .update({ photos: toSave })
-    .eq('id', target.id);
-
-  if (error) {
-    showModal('❌', 'Gagal simpan foto: ' + error.message);
+  try {
+    await api('admin_save_photos', { id: target.id, photos: toSave });
+  } catch (e) {
+    showModal('❌', 'Gagal simpan foto: ' + e.message);
     return;
   }
 
@@ -391,47 +425,15 @@ async function resizeBlob(blobIn, maxW) {
 }
 
 // =====================
-// GENERATE PASSWORD
+// LOAD DATA (lewat server, bukan langsung ke database)
 // =====================
-function createRandomPassword() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let pw = '';
-  for (let i = 0; i < 8; i++) {
-    pw += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return pw;
+async function refreshAdminList() {
+  clients = (await api('admin_list')).clients || [];
+  renderClientList();
 }
 
 // =====================
-// LOAD DATA DARI SUPABASE
-// =====================
-async function loadClients() {
-  const { data, error } = await db
-    .from('clients')
-    .select('*')
-    .order('id');
-
-  if (error) {
-    console.error('Gagal load clients:', error);
-    return;
-  }
-  clients = data || [];
-}
-
-async function loadAdminPassword() {
-  const { data, error } = await db
-    .from('admin')
-    .select('password')
-    .limit(1)
-    .single();
-
-  if (data && data.password) {
-    adminPassword = data.password;
-  }
-}
-
-// =====================
-// LOGIN (tunggal: client ATAU admin)
+// LOGIN (tunggal: client ATAU admin, dicek server)
 // =====================
 async function clientLogin() {
   const input = document.getElementById('client-password').value.trim();
@@ -443,33 +445,34 @@ async function clientLogin() {
     return;
   }
 
-  // 1. Cek password admin
-  if (input === adminPassword) {
-    errorEl.classList.add('hidden');
-    document.getElementById('client-password').value = '';
+  errorEl.classList.add('hidden');
+  document.getElementById('client-password').value = '';
+
+  // 1. Coba sebagai admin
+  try {
+    const r = await api('admin_login', { password: input });
+    adminToken = r.token;
+    localStorage.setItem('mh_admin_token', adminToken);
+    clearClientSession();
+    clients = (await api('admin_list')).clients || [];
     openAdmin();
     return;
-  }
+  } catch (e) { /* bukan password admin, lanjut coba client */ }
 
-  // 2. Cek password client dari Supabase
-  const { data, error } = await db
-    .from('clients')
-    .select('*')
-    .eq('password', input)
-    .maybeSingle();
-
-  if (!data) {
+  // 2. Coba sebagai client
+  try {
+    const r = await api('client_login', { password: input });
+    clientToken = r.token;
+    localStorage.setItem('mh_client_token', clientToken);
+    clearAdminSession();
+    currentClient = r.client;
+    document.getElementById('section-login').classList.add('hidden');
+    showGallery(currentClient);
+    return;
+  } catch (e) {
     errorEl.textContent = '❌ Password salah! Coba lagi.';
     errorEl.classList.remove('hidden');
-    return;
   }
-
-  errorEl.classList.add('hidden');
-  currentClient = data;
-  document.getElementById('section-login').classList.add('hidden');
-  document.getElementById('client-password').value = '';
-  showGallery(currentClient);
-  localStorage.setItem('logged_client_id', data.id);
 }
 
 // =====================
@@ -484,31 +487,31 @@ function openAdmin() {
 }
 
 function adminLogout() {
+  api('admin_logout').catch(() => {});
+  clearAdminSession();
   document.getElementById('section-admin').classList.add('hidden');
   document.getElementById('section-login').classList.remove('hidden');
   document.getElementById('client-password').value = '';
 }
 
 async function changeAdminPassword() {
+  const cur = document.getElementById('current-admin-pw').value;
   const input = document.getElementById('new-admin-pw').value;
-  if (!input || input.length < 4) {
-    alert('Password minimal 4 karakter!');
+  if (!input || input.length < 6) {
+    alert('Password baru minimal 6 karakter!');
     return;
   }
 
-  const { error } = await db
-    .from('admin')
-    .update({ password: input })
-    .eq('id', 1);
-
-  if (error) {
-    alert('Gagal update password admin!');
+  try {
+    await api('admin_change_password', { currentPassword: cur, newPassword: input });
+  } catch (e) {
+    alert('Gagal update password admin!\n\n' + e.message);
     return;
   }
 
-  adminPassword = input;
+  document.getElementById('current-admin-pw').value = '';
   document.getElementById('new-admin-pw').value = '';
-  showModal('✅', `Password admin berhasil diubah ke: ${input}\n\nIngat password ini untuk login berikutnya!`);
+  showModal('✅', `Password admin berhasil diubah.\n\nIngat password ini untuk login berikutnya!`);
 }
 
 // =====================
@@ -519,45 +522,48 @@ async function addClient() {
   const name = nameInput.value.trim();
 
   if (!name) { alert('Masukkan nama client dulu!'); return; }
-  if (clients.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-    alert('Nama client sudah ada!'); return;
-  }
 
-  const password = createRandomPassword();
-  const folderName = `Project_${name.replace(/\s+/g, '_')}`;
-
-  const newClient = {
-    name: name,
-    password: password,
-    folder: folderName,
-    status: 'Menunggu',
-    note: '',
-    selected_files: [],
-    submitted: false
-  };
-
-  const { data, error } = await db
-    .from('clients')
-    .insert([newClient])
-    .select()
-    .single();
-
-  if (error) {
-    alert('Gagal simpan ke database!\n\nError: ' + error.message + '\nCode: ' + error.code + '\nDetails: ' + JSON.stringify(error, null, 2));
-    console.error('Add client error:', error);
+  let created;
+  try {
+    const r = await api('admin_add_client', { name: name });
+    created = r.client;
+  } catch (e) {
+    alert('Gagal simpan ke database!\n\n' + e.message);
     return;
   }
 
-  clients.push(data);
+  clients.push(created);
   renderClientList();
   nameInput.value = '';
 
   showModal('✅',
     `Client "${name}" berhasil ditambahkan!\n\n` +
-    `Password: ${password}\n` +
-    `Folder: ${folderName}\n\n` +
+    `Password: ${created.password}\n` +
+    `Folder: ${created.folder}\n\n` +
     `Kirim password ini ke client Anda.`
   );
+}
+
+// =====================
+// ADMIN: RESET PASSWORD CLIENT
+// =====================
+async function resetClientPassword(id) {
+  const client = clients.find(c => c.id === id);
+  if (!client) return;
+  if (!confirm(`Generate password baru untuk "${client.name}"?\n\nPassword lama tidak berlaku lagi.`)) return;
+
+  let password;
+  try {
+    const r = await api('admin_reset_password', { id: id });
+    password = r.password;
+  } catch (e) {
+    alert('Gagal reset password!\n\n' + e.message);
+    return;
+  }
+
+  client.password = password;
+  renderClientList();
+  showModal('🔑', `Password baru untuk "${client.name}":\n\n${password}\n\nKirim password ini ke client.`);
 }
 
 // =====================
@@ -568,72 +574,34 @@ async function deleteClient(id) {
   if (!client) return;
   if (!confirm(`Hapus client "${client.name}"?\n\nThumbnail-nya juga akan dihapus dari Supabase.`)) return;
 
-  const { error } = await db
-    .from('clients')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    alert('Gagal hapus dari database!');
+  let thumbs = 0;
+  try {
+    const r = await api('admin_delete_client', { id: id });
+    thumbs = r.thumbs || 0;
+  } catch (e) {
+    alert('Gagal hapus dari database!\n\n' + e.message);
     return;
   }
 
   clients = clients.filter(c => c.id !== id);
   renderClientList();
-
-  const t = await cleanupThumbs(id);
-  if (t.ok && t.removed > 0) showToast(`Thumbnail dibersihkan: ${t.removed} file`);
-  else if (!t.ok) showToast('Client dihapus, tapi thumbnail gagal dibersihkan');
+  if (thumbs > 0) showToast(`Thumbnail dibersihkan: ${thumbs} file`);
 }
 
 // =====================
 // ADMIN: UBAH STATUS
 // =====================
 async function changeStatus(id, newStatus) {
-  const { error } = await db
-    .from('clients')
-    .update({ status: newStatus })
-    .eq('id', id);
-
-  if (error) {
-    alert('Gagal update status!');
+  try {
+    await api('admin_update_status', { id: id, status: newStatus });
+  } catch (e) {
+    alert('Gagal update status!\n\n' + e.message);
     return;
   }
 
   const client = clients.find(c => c.id === id);
   if (client) client.status = newStatus;
   renderClientList();
-}
-
-// =====================
-// BERSIHKAN THUMBNAIL SUPABASE (thumbs/{clientId}/)
-// =====================
-async function cleanupThumbs(clientId) {
-  const prefix = clientId + '/';
-  let removed = 0;
-  try {
-    for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await db.storage
-        .from('thumbs')
-        .list(prefix, { limit: 1000, offset: offset });
-      if (error) throw error;
-
-      const files = (data || []).filter(f => f.name && (f.id || f.name.includes('.')));
-      if (files.length === 0) break;
-
-      const { error: rmErr } = await db.storage
-        .from('thumbs')
-        .remove(files.map(f => prefix + f.name));
-      if (rmErr) throw rmErr;
-
-      removed += files.length;
-      if (files.length < 1000) break;
-    }
-    return { ok: true, removed: removed };
-  } catch (e) {
-    console.warn('Gagal bersihkan thumbnail:', e);
-    return { ok: false, removed: removed, error: e.message };
-  }
 }
 
 // =====================
@@ -644,22 +612,18 @@ async function clearClientPhotos(id) {
   if (!client) return;
   if (!confirm(`Kosongkan semua foto untuk "${client.name}"?\n\nThumbnail tersimpan juga akan dihapus dari Supabase.`)) return;
 
-  const { error } = await db
-    .from('clients')
-    .update({ photos: [] })
-    .eq('id', id);
-
-  if (error) {
-    alert('Gagal mengosongkan foto!');
+  let thumbs = 0;
+  try {
+    const r = await api('admin_clear_photos', { id: id });
+    thumbs = r.thumbs || 0;
+  } catch (e) {
+    alert('Gagal mengosongkan foto!\n\n' + e.message);
     return;
   }
 
   client.photos = [];
   renderClientList();
-
-  const t = await cleanupThumbs(id);
-  if (t.ok && t.removed > 0) showToast(`Thumbnail dibersihkan: ${t.removed} file`);
-  else if (!t.ok) showToast('Foto dikosongkan, tapi thumbnail gagal dibersihkan');
+  if (thumbs > 0) showToast(`Thumbnail dibersihkan: ${thumbs} file`);
 }
 
 // =====================
@@ -760,13 +724,12 @@ async function copySelectedToDrive(clientId) {
 
       const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
 
-      const { error } = await db
-        .from('clients')
-        .update({ selected_folder: folderUrl })
-        .eq('id', client.id);
-
-      if (error) console.warn('Gagal simpan link folder:', error);
-      client.selected_folder = folderUrl;
+      try {
+        await api('admin_set_folder', { id: client.id, url: folderUrl });
+        client.selected_folder = folderUrl;
+      } catch (e) {
+        console.warn('Gagal simpan link folder:', e);
+      }
       renderClientList();
 
       showModal('✅',
@@ -813,11 +776,11 @@ function deleteSelectedFolder(id) {
         throw new Error((j.error && j.error.message) || ('HTTP ' + resp.status));
       }
 
-      const { error } = await db
-        .from('clients')
-        .update({ selected_folder: null })
-        .eq('id', id);
-      if (error) console.warn('Gagal simpan selected_folder:', error);
+      try {
+        await api('admin_set_folder', { id: id, url: '' });
+      } catch (e) {
+        console.warn('Gagal simpan selected_folder:', e);
+      }
 
       client.selected_folder = null;
       renderClientList();
@@ -837,8 +800,9 @@ async function setMaxSelect(id, val) {
   let n = parseInt(val, 10);
   if (isNaN(n) || n < 0) n = 0;
 
-  const { error } = await db.from('clients').update({ max_select: n }).eq('id', id);
-  if (error) {
+  try {
+    await api('admin_set_max', { id: id, max: n });
+  } catch (e) {
     showToast('Gagal simpan batas foto');
     return;
   }
@@ -861,12 +825,15 @@ function renderClientList() {
     const statusClass = 'status-' + client.status.toLowerCase();
     const files = client.selected_files || [];
     const fileNames = files.map(f => (typeof f === 'string' ? f : f.name));
+    // Jangan tampilkan ribuan nama file (bikin panel admin berat)
+    const shownNames = fileNames.slice(0, 8).map(esc).join(', ');
+    const moreNames = fileNames.length > 8 ? ` … +${fileNames.length - 8} lainnya` : '';
     const photoCount = (client.photos || []).length;
     const selectedInfo = client.submitted && files.length > 0
-      ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${fileNames.join(', ')}</div>`
+      ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${shownNames}${moreNames}</div>`
       : '';
     const noteInfo = client.note
-      ? `<div class="note-box">📝 ${client.note}</div>`
+      ? `<div class="note-box">📝 ${esc(client.note)}</div>`
       : '<div class="note-box"><span class="no-note">Belum ada catatan</span></div>';
 
     return `
@@ -874,11 +841,11 @@ function renderClientList() {
       <div class="client-top">
         <div class="client-num">${idx + 1}</div>
         <div class="client-info">
-          <span class="name">${client.name}</span>
-          <span class="folder">📁 ${client.folder}</span>
+          <span class="name">${esc(client.name)}</span>
+          <span class="folder">📁 ${esc(client.folder)}</span>
         </div>
-        <div class="pw-box" onclick="copyPassword('${client.password}')" title="Klik untuk copy">
-          ${client.password}
+        <div class="pw-box" onclick="copyPassword('${esc(client.password || '')}')" title="Klik untuk copy">
+          ${esc(client.password || '—')}
         </div>
       </div>
 
@@ -917,7 +884,10 @@ function renderClientList() {
       </div>` : ''}
       ${noteInfo}
 
-      <button class="delete-btn" onclick="deleteClient(${client.id})">Hapus</button>
+      <div class="client-bottom">
+        <button class="reset-pw-btn" onclick="resetClientPassword(${client.id})" title="Buat password baru">🔑 Reset password</button>
+        <button class="delete-btn" onclick="deleteClient(${client.id})">Hapus</button>
+      </div>
     </div>
   `;
   }).join('');
@@ -929,28 +899,19 @@ function renderClientList() {
 async function clearAllData() {
   if (!confirm('Hapus SEMUA data client?\n\nThumbnail semua client juga akan dihapus dari Supabase.\nTindakan ini tidak bisa dibatalkan!')) return;
 
-  const ids = clients.map(c => c.id);
-
-  const { error } = await db
-    .from('clients')
-    .delete()
-    .neq('id', 0);
-
-  if (error) {
-    alert('Gagal hapus data!');
+  let thumbs = 0;
+  try {
+    const r = await api('admin_delete_all');
+    thumbs = r.thumbs || 0;
+  } catch (e) {
+    alert('Gagal hapus data!\n\n' + e.message);
     return;
   }
 
   clients = [];
   renderClientList();
-
-  let total = 0;
-  for (const cid of ids) {
-    const t = await cleanupThumbs(cid);
-    if (t.ok) total += t.removed;
-  }
-  showModal('🗑️', total > 0
-    ? `Semua data client berhasil dihapus.\nThumbnail dibersihkan: ${total} file.`
+  showModal('🗑️', thumbs > 0
+    ? `Semua data client berhasil dihapus.\nThumbnail dibersihkan: ${thumbs} file.`
     : 'Semua data client berhasil dihapus.');
 }
 
@@ -1006,19 +967,20 @@ function renderFileGrid() {
 
   grid.innerHTML = currentPhotos.map(p => {
     const isSelected = selectedFiles.includes(p.id);
-    const fallback = 'https://drive.google.com/thumbnail?id=' + p.id + '&sz=w400';
+    const fallback = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.id) + '&sz=w400';
+    const safeName = esc(p.name);
     const thumbHtml = p.thumb || p.id
-      ? `<img src="${p.thumb || fallback}" alt="${p.name}" loading="lazy"
+      ? `<img src="${esc(p.thumb || fallback)}" alt="${safeName}" loading="lazy"
                onerror="this.onerror=null;this.src='${fallback}'">`
       : '📷';
     return `
-    <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${p.id}" onclick="toggleSelect('${p.id}')">
+    <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${esc(p.id)}" onclick="toggleSelect('${esc(p.id)}')">
       <div class="check-mark">✓</div>
       <button class="zoom-btn" title="Perbesar"
-              onclick="event.stopPropagation(); zoomPhoto('${p.id}')">🔍</button>
+              onclick="event.stopPropagation(); zoomPhoto('${esc(p.id)}')">🔍</button>
       <div class="file-thumb">${thumbHtml}</div>
       <div class="file-info">
-        <div class="fname">${p.name}</div>
+        <div class="fname">${safeName}</div>
       </div>
     </div>
   `;
@@ -1085,42 +1047,27 @@ async function submitSelection() {
     return;
   }
 
-  const maxSel = (currentClient && currentClient.max_select) || 0;
-  if (maxSel > 0 && selectedFiles.length > maxSel) {
-    showModal('⚠️', `Batas maksimal ${maxSel} foto.\n\nKurangi pilihan Anda dulu sebelum kirim.`);
-    return;
-  }
-
   const note = document.getElementById('client-note').value.trim();
-
   const chosen = currentPhotos.filter(p => selectedFiles.includes(p.id));
 
-  const { error } = await db
-    .from('clients')
-    .update({
-      selected_files: chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb })),
-      note: note,
-      submitted: true
-    })
-    .eq('id', currentClient.id);
-
-  if (error) {
-    alert('Gagal simpan pilihan!');
-    console.error(error);
+  let result;
+  try {
+    result = await api('client_submit', {
+      selected_files: chosen.map(p => ({ id: p.id })),
+      note: note
+    });
+  } catch (e) {
+    showModal('❌', 'Gagal menyimpan pilihan:\n\n' + e.message);
     return;
   }
 
-  // Update state lokal
-  currentClient.selected_files = chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb }));
-  currentClient.note = note;
-  currentClient.submitted = true;
-
+  currentClient = result.client;
   const idx = clients.findIndex(c => c.id === currentClient.id);
   if (idx >= 0) clients[idx] = currentClient;
 
   showModal('✅',
     `Pilihan berhasil dikirim!\n\n` +
-    `${chosen.length} foto terpilih\n` +
+    `${result.total} foto terpilih\n` +
     `Catatan: ${note || '(tidak ada)'}\n\n` +
     `Admin akan melihat pilihan Anda.`
   );
@@ -1137,10 +1084,8 @@ function viewFile(name, size) {
 // LOGOUT (client)
 // =====================
 function logout() {
-  currentClient = null;
-  selectedFiles = [];
-  currentPhotos = [];
-  localStorage.removeItem('logged_client_id');
+  api('client_logout').catch(() => {});
+  clearClientSession();
   document.getElementById('client-password').value = '';
   document.getElementById('section-gallery').classList.add('hidden');
   document.getElementById('section-login').classList.remove('hidden');
@@ -1160,23 +1105,32 @@ function closeModal() {
 }
 
 // =====================
-// INIT (load dari Supabase)
+// INIT: lanjutkan sesi sebelumnya (kalau masih valid)
 // =====================
 document.addEventListener('DOMContentLoaded', async function() {
-  // Load data dari Supabase
-  await loadClients();
-  await loadAdminPassword();
+  const loginEl = document.getElementById('section-login');
 
-  // Cek session login sebelumnya
-  const savedId = localStorage.getItem('logged_client_id');
-  if (savedId) {
-    const fresh = clients.find(c => c.id === parseInt(savedId));
-    if (fresh) {
-      currentClient = fresh;
-      document.getElementById('section-login').classList.add('hidden');
+  if (adminToken) {
+    try {
+      await api('admin_session');
+      clients = (await api('admin_list')).clients || [];
+      loginEl.classList.add('hidden');
+      openAdmin();
+      return;
+    } catch (e) {
+      clearAdminSession();
+    }
+  }
+
+  if (clientToken) {
+    try {
+      const r = await api('client_session');
+      currentClient = r.client;
+      loginEl.classList.add('hidden');
       showGallery(currentClient);
-    } else {
-      localStorage.removeItem('logged_client_id');
+      return;
+    } catch (e) {
+      clearClientSession();
     }
   }
 });

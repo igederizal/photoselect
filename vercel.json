@@ -5,6 +5,9 @@
   "functions": {
     "api/thumb.js": {
       "maxDuration": 60
+    },
+    "api/app.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

@@ -270,6 +270,27 @@ header .brand-tagline {
   border-color: transparent;
 }
 
+.client-bottom {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.client-row .reset-pw-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.client-row .reset-pw-btn:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
 .empty-msg {
   text-align: center;
   color: var(--text2);
