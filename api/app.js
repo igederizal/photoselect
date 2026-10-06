@@ -226,7 +226,7 @@ module.exports = async function handler(req, res) {
         }
 
         const { data, error } = await db.from('clients').insert({
-          name, folder, password: password, status: 'Menunggu', note: '',
+          name, folder, status: 'Menunggu', note: '',
           selected_files: [], submitted: false, photos: [], max_select: 0,
           pw_hash: hash, pw_enc: encryptText(password)
         }).select('*').single();
