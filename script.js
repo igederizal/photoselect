@@ -566,7 +566,7 @@ async function addClient() {
 async function deleteClient(id) {
   const client = clients.find(c => c.id === id);
   if (!client) return;
-  if (!confirm(`Hapus client "${client.name}"?`)) return;
+  if (!confirm(`Hapus client "${client.name}"?\n\nThumbnail-nya juga akan dihapus dari Supabase.`)) return;
 
   const { error } = await db
     .from('clients')
@@ -580,6 +580,10 @@ async function deleteClient(id) {
 
   clients = clients.filter(c => c.id !== id);
   renderClientList();
+
+  const t = await cleanupThumbs(id);
+  if (t.ok && t.removed > 0) showToast(`Thumbnail dibersihkan: ${t.removed} file`);
+  else if (!t.ok) showToast('Client dihapus, tapi thumbnail gagal dibersihkan');
 }
 
 // =====================
@@ -602,12 +606,43 @@ async function changeStatus(id, newStatus) {
 }
 
 // =====================
+// BERSIHKAN THUMBNAIL SUPABASE (thumbs/{clientId}/)
+// =====================
+async function cleanupThumbs(clientId) {
+  const prefix = clientId + '/';
+  let removed = 0;
+  try {
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await db.storage
+        .from('thumbs')
+        .list(prefix, { limit: 1000, offset: offset });
+      if (error) throw error;
+
+      const files = (data || []).filter(f => f.name && (f.id || f.name.includes('.')));
+      if (files.length === 0) break;
+
+      const { error: rmErr } = await db.storage
+        .from('thumbs')
+        .remove(files.map(f => prefix + f.name));
+      if (rmErr) throw rmErr;
+
+      removed += files.length;
+      if (files.length < 1000) break;
+    }
+    return { ok: true, removed: removed };
+  } catch (e) {
+    console.warn('Gagal bersihkan thumbnail:', e);
+    return { ok: false, removed: removed, error: e.message };
+  }
+}
+
+// =====================
 // ADMIN: KOSONGKAN FOTO CLIENT
 // =====================
 async function clearClientPhotos(id) {
   const client = clients.find(c => c.id === id);
   if (!client) return;
-  if (!confirm(`Kosongkan semua foto untuk "${client.name}"?`)) return;
+  if (!confirm(`Kosongkan semua foto untuk "${client.name}"?\n\nThumbnail tersimpan juga akan dihapus dari Supabase.`)) return;
 
   const { error } = await db
     .from('clients')
@@ -621,6 +656,10 @@ async function clearClientPhotos(id) {
 
   client.photos = [];
   renderClientList();
+
+  const t = await cleanupThumbs(id);
+  if (t.ok && t.removed > 0) showToast(`Thumbnail dibersihkan: ${t.removed} file`);
+  else if (!t.ok) showToast('Foto dikosongkan, tapi thumbnail gagal dibersihkan');
 }
 
 // =====================
@@ -744,6 +783,52 @@ async function copySelectedToDrive(clientId) {
 }
 
 // =====================
+// ADMIN: HAPUS FOLDER HASIL SALINAN (ke Trash Google Drive)
+// =====================
+function deleteSelectedFolder(id) {
+  const client = clients.find(c => c.id === id);
+  if (!client || !client.selected_folder) return;
+
+  if (!confirm(
+    `Hapus folder salinan "${client.folder}_Selected"?\n\n` +
+    `Folder beserta isinya dipindahkan ke Trash Google Drive\n` +
+    `(bisa dipulihkan selama 30 hari).\n\n` +
+    `Foto asli client TIDAK terpengaruh.`)) return;
+
+  getDriveToken(async (token) => {
+    try {
+      const m = client.selected_folder.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+      if (!m) {
+        showModal('❌', 'Link folder tidak valid.');
+        return;
+      }
+
+      const resp = await fetch('https://www.googleapis.com/drive/v3/files/' + m[1], {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+
+      if (!resp.ok && resp.status !== 404) {
+        const j = await resp.json().catch(() => ({}));
+        throw new Error((j.error && j.error.message) || ('HTTP ' + resp.status));
+      }
+
+      const { error } = await db
+        .from('clients')
+        .update({ selected_folder: null })
+        .eq('id', id);
+      if (error) console.warn('Gagal simpan selected_folder:', error);
+
+      client.selected_folder = null;
+      renderClientList();
+      showModal('🗑️', 'Folder salinan dihapus (masuk Trash Google Drive).\n\nPulihkan dari Trash dalam 30 hari kalau masih perlu.');
+    } catch (e) {
+      showModal('❌', 'Gagal hapus folder: ' + e.message);
+    }
+  });
+}
+
+// =====================
 // ADMIN: BATAS FOTO DIPILIH
 // =====================
 async function setMaxSelect(id, val) {
@@ -826,7 +911,9 @@ function renderClientList() {
         <button class="drive-btn" onclick="copySelectedToDrive(${client.id})">
           📁 Salin ${files.length} foto terpilih ke folder
         </button>
-        ${client.selected_folder ? `<a class="folder-link" href="${client.selected_folder}" target="_blank" rel="noopener">🔗 Buka folder di Drive</a>` : ''}
+        ${client.selected_folder ? `
+        <a class="folder-link" href="${client.selected_folder}" target="_blank" rel="noopener">🔗 Buka folder di Drive</a>
+        <button class="clear-photo-btn" onclick="deleteSelectedFolder(${client.id})" title="Pindahkan folder salinan ke Trash Google Drive">🗑️ Hapus folder salinan</button>` : ''}
       </div>` : ''}
       ${noteInfo}
 
@@ -840,7 +927,9 @@ function renderClientList() {
 // ADMIN: HAPUS SEMUA DATA
 // =====================
 async function clearAllData() {
-  if (!confirm('Hapus SEMUA data client? Tindakan ini tidak bisa dibatalkan!')) return;
+  if (!confirm('Hapus SEMUA data client?\n\nThumbnail semua client juga akan dihapus dari Supabase.\nTindakan ini tidak bisa dibatalkan!')) return;
+
+  const ids = clients.map(c => c.id);
 
   const { error } = await db
     .from('clients')
@@ -854,7 +943,15 @@ async function clearAllData() {
 
   clients = [];
   renderClientList();
-  showModal('🗑️', 'Semua data client berhasil dihapus.');
+
+  let total = 0;
+  for (const cid of ids) {
+    const t = await cleanupThumbs(cid);
+    if (t.ok) total += t.removed;
+  }
+  showModal('🗑️', total > 0
+    ? `Semua data client berhasil dihapus.\nThumbnail dibersihkan: ${total} file.`
+    : 'Semua data client berhasil dihapus.');
 }
 
 function copyPassword(pw) {
