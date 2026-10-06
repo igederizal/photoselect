@@ -331,7 +331,20 @@ module.exports = async function handler(req, res) {
       if (error) throw new Error('DB: ' + error.message);
       if (!c) return res.status(401).json({ error: 'Password salah' });
 
-      await db.from('client_sessions').delete().eq('client_id', c.id);
+      // bersihkan sesi kedaluwarsa saja - jangan hapus sesi lain
+      // (client boleh login di HP + laptop sekaligus)
+      await db.from('client_sessions').delete()
+        .eq('client_id', c.id).lt('expires_at', new Date().toISOString());
+
+      // batasi 5 sesi aktif per client
+      const { data: active } = await db.from('client_sessions')
+        .select('token').eq('client_id', c.id)
+        .order('created_at', { ascending: false });
+      if ((active || []).length >= 5) {
+        await db.from('client_sessions').delete()
+          .in('token', (active || []).slice(4).map(s => s.token));
+      }
+
       const expires = new Date(Date.now() + CLIENT_SESSION_DAYS * 86400 * 1000).toISOString();
       const { data: s, error: se } = await db.from('client_sessions')
         .insert({ client_id: c.id, expires_at: expires })
