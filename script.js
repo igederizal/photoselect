@@ -375,53 +375,16 @@ async function cacheThumbnails(items, token, clientId) {
         processed++;
       });
     } else {
-      // Fallback: download via googleapis (CORS aman) → resize di browser → upload
-      for (const p of chunk) {
-        try {
-          const r = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${p.id}?alt=media`,
-            { headers: { Authorization: 'Bearer ' + token } }
-          );
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          const blob = await resizeBlob(await r.blob(), 1024);
-          const path = `${clientId}/${p.id}.jpg`;
-          const { error } = await db.storage.from('thumbs')
-            .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-          if (error) throw error;
-          const { data: pub } = db.storage.from('thumbs').getPublicUrl(path);
-          p.thumb = pub.publicUrl;
-          p.thumbLink = '';
-          ok++;
-        } catch (e) {
-          if (!firstError) firstError = 'direct: ' + String(e.message || e);
-          console.warn('Gagal thumbnail', p.name, e);
-          fail++;
-        }
-        processed++;
-      }
+      // Server thumbnail tidak tersedia (mis. dibuka langsung tanpa server Vercel).
+      // Thumbnail hanya bisa dibuat server-side (butuh kunci database), jadi dilewati.
+      if (!firstError) firstError = 'Server thumbnail tidak tersedia (butuh /api/thumb)';
+      for (const p of chunk) { fail++; processed++; }
     }
 
     showModal('⏳', `Menyimpan thumbnail... ${processed}/${total}`);
   }
 
   return { ok: ok, fail: fail, error: firstError };
-}
-
-async function resizeBlob(blobIn, maxW) {
-  try {
-    const bmp = await createImageBitmap(blobIn);
-    const scale = Math.min(1, maxW / bmp.width);
-    const w = Math.max(1, Math.round(bmp.width * scale));
-    const h = Math.max(1, Math.round(bmp.height * scale));
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
-    const out = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.8));
-    return out || blobIn;
-  } catch (e) {
-    return blobIn;
-  }
 }
 
 // =====================

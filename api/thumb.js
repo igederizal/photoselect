@@ -1,8 +1,6 @@
-// Pakai service_role dari env Vercel (jika ada) supaya policy storage bisa dikunci.
-// Fallback ke anon key hanya untuk pengembangan lokal.
+// Kunci database hanya dari env Vercel (tidak ada kunci yang tertanam di kode anymore)
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://sdrfwrepoufuuxxvawsh.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcmZ3cmVwb3VmdXV4eHZhd3NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNDc1MTQsImV4cCI6MjEwNjcyMzUxNH0.g_CmWjHKFiCioYoVRiB-a3AnNGxWbR5SUbBmiB2Jmd0';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const BATCH_MAX = 40;
 const CONCURRENCY = 6;
