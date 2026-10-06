@@ -254,6 +254,50 @@ header .brand-tagline {
 }
 .client-row .pw-box:hover { background: #495057; }
 
+.pw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pw-wrap .pw-box.masked {
+  filter: blur(5px);
+  user-select: none;
+}
+.pw-eye {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.6;
+  padding: 2px;
+  transition: opacity 0.2s;
+}
+.pw-eye:hover { opacity: 1; }
+.pw-warn {
+  color: #e8a33d;
+  font-size: 12px;
+}
+
+.verify-result {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+.verify-result.ok {
+  border-color: rgba(46, 204, 113, 0.45);
+  background: rgba(46, 204, 113, 0.08);
+  color: #9ad8ae;
+}
+.verify-result.bad {
+  border-color: rgba(234, 67, 53, 0.45);
+  background: rgba(234, 67, 53, 0.08);
+  color: #c9958d;
+}
+
 .client-row .delete-btn {
   background: none;
   border: 1px solid rgba(234, 67, 53, 0.45);

@@ -94,12 +94,18 @@ function adminClient(c) {
   if (!c) return null;
   const out = publicClient(c);
   // Password hanya untuk tampilan admin (disenkripsi di server, dikirim via HTTPS)
+  let pwOk = null;
   try {
-    out.password = c.pw_enc ? decryptText(c.pw_enc) : '';
+    const plain = c.pw_enc ? decryptText(c.pw_enc) : '';
+    out.password = plain;
+    // verifikasi: apakah password yang tampil = password yang berlaku (dicek via hash)
+    pwOk = !!(plain && c.pw_hash) && safeEqual(sha256(plain), c.pw_hash);
   } catch (e) {
     console.error('gagal dekripsi password client', c.id, e.message);
     out.password = '';
+    pwOk = false;
   }
+  out.pw_ok = pwOk;
   return out;
 }
 
@@ -177,6 +183,22 @@ module.exports = async function handler(req, res) {
     if (action === 'admin_logout') {
       await db.from('admin_sessions').delete().eq('token', token);
       return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'admin_verify_password') {
+      const password = str(body.password, 200);
+      if (!password) return res.status(400).json({ error: 'Masukkan password dulu' });
+      const h = sha256(password);
+
+      const { data: c } = await db.from('clients')
+        .select('id,name').eq('pw_hash', h).maybeSingle();
+      if (c) return res.status(200).json({ ok: true, result: 'client', id: c.id, name: c.name });
+
+      const { data: a } = await db.from('admin')
+        .select('id').eq('pw_hash', h).maybeSingle();
+      if (a) return res.status(200).json({ ok: true, result: 'admin', name: 'Admin' });
+
+      return res.status(200).json({ ok: true, result: 'none' });
     }
 
     if (action === 'admin_change_password') {

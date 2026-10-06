@@ -844,8 +844,12 @@ function renderClientList() {
           <span class="name">${esc(client.name)}</span>
           <span class="folder">📁 ${esc(client.folder)}</span>
         </div>
-        <div class="pw-box" onclick="copyPassword('${esc(client.password || '')}')" title="Klik untuk copy">
-          ${esc(client.password || '—')}
+        <div class="pw-wrap">
+          <div class="pw-box" data-cid="${client.id}" onclick="copyPassword(${client.id})" title="Klik untuk copy (otomatis diverifikasi)">
+            ${esc(client.password || '—')}
+          </div>
+          <button class="pw-eye" onclick="togglePassword(${client.id})" title="Lihat / sembunyikan password">👁</button>
+          ${client.pw_ok === false ? '<span class="pw-warn" title="Password tidak cocok dengan hash - Reset password">⚠</span>' : ''}
         </div>
       </div>
 
@@ -915,12 +919,64 @@ async function clearAllData() {
     : 'Semua data client berhasil dihapus.');
 }
 
-function copyPassword(pw) {
-  navigator.clipboard.writeText(pw).then(() => {
-    showModal('📋', `Password "${pw}" berhasil di-copy!`);
-  }).catch(() => {
-    showModal('📋', `Password: ${pw}\n(Salin manual ya)`);
-  });
+function copyPassword(id) {
+  const client = clients.find(c => c.id === id);
+  if (!client) return;
+  const pw = client.password || '';
+  if (!pw) { showModal('⚠️', 'Password belum tersedia. Coba 🔑 Reset password.'); return; }
+
+  // Verifikasi dulu ke server: pastikan password yang tampil benar-benar berlaku
+  api('admin_verify_password', { password: pw })
+    .then(r => {
+      if (r.result !== 'client') {
+        showModal('⚠️', 'Password yang ditampilkan tidak cocok dengan database.\n\nSebaiknya klik "🔑 Reset password" untuk membuat yang baru.');
+        return;
+      }
+      return navigator.clipboard.writeText(pw).then(() => {
+        showModal('📋', `Password "${pw}" berhasil di-copy!\n\n(terverifikasi ✓ untuk ${r.name})`);
+      });
+    })
+    .catch(() => {
+      navigator.clipboard.writeText(pw).then(() => {
+        showModal('📋', `Password "${pw}" berhasil di-copy!`);
+      }).catch(() => {
+        showModal('📋', `Password: ${pw}\n(Salin manual ya)`);
+      });
+    });
+}
+
+// Sembunyikan / tampilkan password (cegah ketikan terlihat saat share layar)
+function togglePassword(id) {
+  const box = document.querySelector(`.pw-box[data-cid="${id}"]`);
+  if (box) box.classList.toggle('masked');
+}
+
+// =====================
+// CEK PASSWORD (alat bantu support)
+// =====================
+async function verifyPassword() {
+  const input = document.getElementById('verify-password');
+  const el = document.getElementById('verify-result');
+  const pw = input.value.trim();
+  el.classList.remove('hidden');
+  if (!pw) { el.className = 'verify-result'; el.textContent = 'Masukkan password dulu.'; return; }
+
+  try {
+    const r = await api('admin_verify_password', { password: pw });
+    if (r.result === 'admin') {
+      el.className = 'verify-result ok';
+      el.textContent = '✅ Ini password ADMIN (bukan client)';
+    } else if (r.result === 'client') {
+      el.className = 'verify-result ok';
+      el.textContent = '✅ Cocok untuk client: ' + r.name;
+    } else {
+      el.className = 'verify-result bad';
+      el.textContent = '❌ Password ini tidak cocok dengan client/admin mana pun';
+    }
+  } catch (e) {
+    el.className = 'verify-result bad';
+    el.textContent = '❌ ' + e.message;
+  }
 }
 
 // =====================
