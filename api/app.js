@@ -215,7 +215,12 @@ module.exports = async function handler(req, res) {
       const { error } = await db.from('admin')
         .update({ pw_hash: sha256(next) }).eq('id', admin.id || 1);
       if (error) throw new Error('DB: ' + error.message);
-      return res.status(200).json({ ok: true });
+
+      // Verifikasi ulang: pastikan password baru yang tersimpan benar-benar yang diketik
+      const { data: cek } = await db.from('admin').select('pw_hash').limit(1).single();
+      const verified = !!cek && safeEqual(cek.pw_hash, sha256(next));
+
+      return res.status(200).json({ ok: true, verified });
     }
 
     if (action.startsWith('admin_')) {

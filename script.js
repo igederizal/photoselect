@@ -502,8 +502,9 @@ async function changeAdminPassword() {
     return;
   }
 
+  let hasil;
   try {
-    await api('admin_change_password', { currentPassword: cur, newPassword: input });
+    hasil = await api('admin_change_password', { currentPassword: cur, newPassword: input });
   } catch (e) {
     alert('Gagal update password admin!\n\n' + e.message);
     return;
@@ -511,7 +512,24 @@ async function changeAdminPassword() {
 
   document.getElementById('current-admin-pw').value = '';
   document.getElementById('new-admin-pw').value = '';
-  showModal('✅', `Password admin berhasil diubah.\n\nIngat password ini untuk login berikutnya!`);
+
+  showModal('✅',
+    'Password admin berhasil diubah.\n\n' +
+    'Password baru: ' + input + '\n\n' +
+    (hasil.verified
+      ? '✅ Sudah diverifikasi: password baru ini aktif dan siap dipakai login.'
+      : '⚠️ Penyimpanan terverifikasi, tapi password baru gagal dicek ulang. Coba ganti sekali lagi.')
+  );
+}
+
+// Lihat / sembunyikan password pada input form
+function toggleInputPw(inputId, btn) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const jadiTerlihat = el.type === 'password';
+  el.type = jadiTerlihat ? 'text' : 'password';
+  btn.textContent = jadiTerlihat ? '🙈' : '👁';
+  btn.title = jadiTerlihat ? 'Sembunyikan password' : 'Lihat password';
 }
 
 // =====================
@@ -949,34 +967,6 @@ function copyPassword(id) {
 function togglePassword(id) {
   const box = document.querySelector(`.pw-box[data-cid="${id}"]`);
   if (box) box.classList.toggle('masked');
-}
-
-// =====================
-// CEK PASSWORD (alat bantu support)
-// =====================
-async function verifyPassword() {
-  const input = document.getElementById('verify-password');
-  const el = document.getElementById('verify-result');
-  const pw = input.value.trim();
-  el.classList.remove('hidden');
-  if (!pw) { el.className = 'verify-result'; el.textContent = 'Masukkan password dulu.'; return; }
-
-  try {
-    const r = await api('admin_verify_password', { password: pw });
-    if (r.result === 'admin') {
-      el.className = 'verify-result ok';
-      el.textContent = '✅ Ini password ADMIN (bukan client)';
-    } else if (r.result === 'client') {
-      el.className = 'verify-result ok';
-      el.textContent = '✅ Cocok untuk client: ' + r.name;
-    } else {
-      el.className = 'verify-result bad';
-      el.textContent = '❌ Password ini tidak cocok dengan client/admin mana pun';
-    }
-  } catch (e) {
-    el.className = 'verify-result bad';
-    el.textContent = '❌ ' + e.message;
-  }
 }
 
 // =====================

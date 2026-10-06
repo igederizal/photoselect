@@ -278,25 +278,26 @@ header .brand-tagline {
   font-size: 12px;
 }
 
-.verify-result {
-  margin-top: 10px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  color: var(--text2);
+.pw-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 160px;
 }
-.verify-result.ok {
-  border-color: rgba(46, 204, 113, 0.45);
-  background: rgba(46, 204, 113, 0.08);
-  color: #9ad8ae;
+.pw-field input { padding-right: 38px; }
+.pw-eye-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.55;
+  padding: 2px 4px;
+  transition: opacity 0.2s;
 }
-.verify-result.bad {
-  border-color: rgba(234, 67, 53, 0.45);
-  background: rgba(234, 67, 53, 0.08);
-  color: #c9958d;
-}
+.pw-eye-btn:hover { opacity: 1; }
 
 .client-row .delete-btn {
   background: none;
