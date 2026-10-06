@@ -772,7 +772,7 @@ function renderClientList() {
     return;
   }
 
-  container.innerHTML = clients.map(client => {
+  container.innerHTML = clients.map((client, idx) => {
     const statusClass = 'status-' + client.status.toLowerCase();
     const files = client.selected_files || [];
     const fileNames = files.map(f => (typeof f === 'string' ? f : f.name));
@@ -787,7 +787,7 @@ function renderClientList() {
     return `
     <div class="client-row client-card">
       <div class="client-top">
-        <div class="client-num">${client.id}</div>
+        <div class="client-num">${idx + 1}</div>
         <div class="client-info">
           <span class="name">${client.name}</span>
           <span class="folder">📁 ${client.folder}</span>
