@@ -5,7 +5,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const BATCH_MAX = 40;
 const CONCURRENCY = 6;
 const SIZE_GALERI = 1024;  // untuk grid di layar
-const SIZE_ZOOM = 2000;    // untuk perbesar (dimuat saat diklik)
+const SIZE_ZOOM = 1600;    // untuk perbesar (dimuat saat diklik) - hemat ~54% storage vs 2000px
 
 async function uploadThumb(path, buf) {
   const up = await fetch(`${SUPABASE_URL}/storage/v1/object/thumbs/${path}`, {
