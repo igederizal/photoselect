@@ -122,6 +122,11 @@
 
       <div id="file-grid" class="file-grid"></div>
 
+      <div id="load-more-wrap" class="load-more-wrap hidden">
+        <span id="photo-counter" class="photo-counter"></span>
+        <button id="load-more-btn" class="load-more-btn" onclick="appendNextBatch()">Muat foto lagi</button>
+      </div>
+
       <div class="note-section">
         <h3>📝 Catatan untuk Editor</h3>
         <textarea id="client-note" placeholder="Contoh: Tolong edit yang natural, jangan terlalu terang..."></textarea>
@@ -148,6 +153,7 @@
       <img id="zoom-img" alt="">
       <div class="zoom-footer">
         <span id="zoom-name"></span>
+        <span id="zoom-loading" class="zoom-loading hidden">⏳ Memuat versi besar...</span>
         <button onclick="closeZoom()" class="zoom-close">✕ Tutup</button>
       </div>
     </div>

@@ -4,7 +4,10 @@
 let clients = [];
 let currentClient = null;
 let selectedFiles = [];   // berisi ID foto yang dicentang
-let currentPhotos = [];   // pool foto di grid: {id, name, thumb}
+let currentPhotos = [];   // pool foto di grid: {id, name, thumb, zoom}
+let renderedCount = 0;    // berapa foto sudah dirender di grid
+const RENDER_BATCH = 60;  // foto per batch (biar HP tidak berat)
+let loadObserver = null;  // pemicu muat foto berikutnya saat scroll
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
 const MAX_PHOTOS = 5000;    // batas foto per client
@@ -298,7 +301,7 @@ async function onPickerCallback(data) {
   }
 
   // Simpan tanpa thumbLink (bersifat sementara)
-  const toSave = photos.map(p => ({ id: p.id, name: p.name, thumb: p.thumb || '' }));
+  const toSave = photos.map(p => ({ id: p.id, name: p.name, thumb: p.thumb || '', zoom: p.zoom || '' }));
 
   try {
     await api('admin_save_photos', { id: target.id, photos: toSave });
@@ -365,6 +368,7 @@ async function cacheThumbnails(items, token, clientId) {
         const p = chunk.find(x => x.id === r.id);
         if (p && r.ok) {
           p.thumb = r.url;
+          p.zoom = r.zoomUrl || '';
           p.thumbLink = '';
           ok++;
         } else {
@@ -960,29 +964,17 @@ function showGallery(client) {
 }
 
 // =====================
-// RENDER FILE GRID + CHECKBOX
+// RENDER FILE GRID + CHECKBOX (dimuat bertahap, ringan di HP)
 // =====================
-function renderFileGrid() {
-  const grid = document.getElementById('file-grid');
-
-  if (currentPhotos.length === 0) {
-    grid.innerHTML = `
-      <div class="empty-grid">
-        <span class="empty-icon">📷</span>
-        <p>Belum ada foto di galeri ini.<br>Admin belum memposting foto untuk project Anda.</p>
-      </div>`;
-    return;
-  }
-
-  grid.innerHTML = currentPhotos.map(p => {
-    const isSelected = selectedFiles.includes(p.id);
-    const fallback = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.id) + '&sz=w400';
-    const safeName = esc(p.name);
-    const thumbHtml = p.thumb || p.id
-      ? `<img src="${esc(p.thumb || fallback)}" alt="${safeName}" loading="lazy"
+function fileCardHtml(p) {
+  const isSelected = selectedFiles.includes(p.id);
+  const fallback = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.id) + '&sz=w400';
+  const safeName = esc(p.name);
+  const thumbHtml = p.thumb || p.id
+    ? `<img src="${esc(p.thumb || fallback)}" alt="${safeName}" loading="lazy" decoding="async"
                onerror="this.onerror=null;this.src='${fallback}'">`
-      : '📷';
-    return `
+    : '📷';
+  return `
     <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${esc(p.id)}" onclick="toggleSelect('${esc(p.id)}')">
       <div class="check-mark">✓</div>
       <button class="zoom-btn" title="Perbesar"
@@ -991,9 +983,78 @@ function renderFileGrid() {
       <div class="file-info">
         <div class="fname">${safeName}</div>
       </div>
-    </div>
-  `;
-  }).join('');
+    </div>`;
+}
+
+function renderFileGrid() {
+  const grid = document.getElementById('file-grid');
+  renderedCount = 0;
+  if (loadObserver) { loadObserver.disconnect(); loadObserver = null; }
+
+  if (currentPhotos.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-grid">
+        <span class="empty-icon">📷</span>
+        <p>Belum ada foto di galeri ini.<br>Admin belum memposting foto untuk project Anda.</p>
+      </div>`;
+    updateLoadMoreUI();
+    return;
+  }
+
+  grid.innerHTML = '';
+  appendNextBatch();
+}
+
+// Tambah 1 batch foto di bawah grid (dipakai juga oleh tombol & auto-scroll)
+function appendNextBatch() {
+  const grid = document.getElementById('file-grid');
+  if (renderedCount >= currentPhotos.length) { updateLoadMoreUI(); return; }
+
+  const slice = currentPhotos.slice(renderedCount, renderedCount + RENDER_BATCH);
+  grid.insertAdjacentHTML('beforeend', slice.map(fileCardHtml).join(''));
+  renderedCount += slice.length;
+
+  updateLoadMoreUI();
+  setupLoadObserver();
+}
+
+function updateLoadMoreUI() {
+  const wrap = document.getElementById('load-more-wrap');
+  const counter = document.getElementById('photo-counter');
+  const btn = document.getElementById('load-more-btn');
+  if (!wrap || !counter || !btn) return;
+
+  const total = currentPhotos.length;
+  if (total === 0 || renderedCount === 0) {
+    wrap.classList.add('hidden');
+    return;
+  }
+
+  if (renderedCount < total) {
+    wrap.classList.remove('hidden');
+    btn.classList.remove('hidden');
+    counter.textContent = `Menampilkan ${renderedCount} dari ${total} foto`;
+    btn.textContent = `Muat ${Math.min(RENDER_BATCH, total - renderedCount)} foto lagi`;
+  } else {
+    wrap.classList.remove('hidden');
+    btn.classList.add('hidden');
+    counter.textContent = `Semua ${total} foto sudah dimuat`;
+  }
+}
+
+// Muat foto berikutnya otomatis saat user mendekati bawah
+function setupLoadObserver() {
+  if (loadObserver) loadObserver.disconnect();
+  const sentinel = document.getElementById('load-more-wrap');
+  if (!sentinel || renderedCount >= currentPhotos.length) return;
+  if (!('IntersectionObserver' in window)) return;
+
+  loadObserver = new IntersectionObserver((entries) => {
+    if (entries[0] && entries[0].isIntersecting && renderedCount < currentPhotos.length) {
+      appendNextBatch();
+    }
+  }, { rootMargin: '700px 0px' });
+  loadObserver.observe(sentinel);
 }
 
 // =====================
@@ -1003,16 +1064,38 @@ function zoomPhoto(fileId) {
   const p = currentPhotos.find(x => x.id === fileId);
   if (!p) return;
 
-  const src = p.thumb || ('https://drive.google.com/thumbnail?id=' + p.id + '&sz=w1024');
-  document.getElementById('zoom-img').src = src;
+  const img = document.getElementById('zoom-img');
+  const loading = document.getElementById('zoom-loading');
+  const fallback = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.id) + '&sz=w1024';
+
+  // Tampilkan versi besar (2000px) kalau ada, kalau belum pakai pratinjau
+  if (p.zoom) {
+    if (loading) loading.classList.remove('hidden');
+    img.onload = () => { if (loading) loading.classList.add('hidden'); };
+    img.onerror = () => {
+      if (loading) loading.classList.add('hidden');
+      img.onerror = null;
+      img.src = p.thumb || fallback;
+    };
+    img.src = p.zoom;
+  } else {
+    if (loading) loading.classList.add('hidden');
+    img.src = p.thumb || fallback;
+  }
+
   document.getElementById('zoom-name').textContent = p.name;
   document.getElementById('zoom-overlay').classList.remove('hidden');
 }
 
 function closeZoom() {
   const overlay = document.getElementById('zoom-overlay');
+  const img = document.getElementById('zoom-img');
+  const loading = document.getElementById('zoom-loading');
   overlay.classList.add('hidden');
-  document.getElementById('zoom-img').src = '';
+  img.onload = null;
+  img.onerror = null;
+  img.src = '';
+  if (loading) loading.classList.add('hidden');
 }
 
 // =====================

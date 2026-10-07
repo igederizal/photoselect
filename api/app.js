@@ -289,7 +289,12 @@ module.exports = async function handler(req, res) {
         const arr = Array.isArray(body.photos) ? body.photos.slice(0, MAX_PHOTOS) : [];
         const photos = arr
           .filter(p => p && p.id)
-          .map(p => ({ id: str(p.id, 200), name: str(p.name, 300), thumb: str(p.thumb, 600) }));
+          .map(p => ({
+            id: str(p.id, 200),
+            name: str(p.name, 300),
+            thumb: str(p.thumb, 600),
+            zoom: str(p.zoom, 600)
+          }));
         const { error } = await db.from('clients').update({ photos }).eq('id', id);
         if (error) throw new Error('DB: ' + error.message);
         return res.status(200).json({ ok: true, total: photos.length });
@@ -412,7 +417,7 @@ module.exports = async function handler(req, res) {
 
       const note = str(body.note, MAX_NOTE).trim();
       const { error: ue } = await db.from('clients').update({
-        selected_files: chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb })),
+        selected_files: chosen.map(p => ({ id: p.id, name: p.name, thumb: p.thumb, zoom: p.zoom })),
         note,
         submitted: true
       }).eq('id', c.id);

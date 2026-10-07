@@ -4,6 +4,22 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const BATCH_MAX = 40;
 const CONCURRENCY = 6;
+const SIZE_GALERI = 1024;  // untuk grid di layar
+const SIZE_ZOOM = 2000;    // untuk perbesar (dimuat saat diklik)
+
+async function uploadThumb(path, buf) {
+  const up = await fetch(`${SUPABASE_URL}/storage/v1/object/thumbs/${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'image/jpeg',
+      'x-upsert': 'true'
+    },
+    body: buf
+  });
+  if (!up.ok) throw new Error('Supabase ' + up.status + ': ' + (await up.text()));
+}
 
 async function processOne(fileId, token, clientId) {
   try {
@@ -15,33 +31,29 @@ async function processOne(fileId, token, clientId) {
     if (!driveResp.ok) throw new Error('Drive HTTP ' + driveResp.status);
     const inBuf = Buffer.from(await driveResp.arrayBuffer());
 
-    // 2. Resize jadi pratinjau 1024px JPEG
+    // 2. Resize jadi 2 ukuran: galeri (ringan) + zoom (tajam)
     const sharp = require('sharp');
-    const outBuf = await sharp(inBuf)
-      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+    const base = sharp(inBuf, { failOn: 'none' });
+    const galeri = await base.clone()
+      .resize({ width: SIZE_GALERI, height: SIZE_GALERI, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer();
+    const zoom = await base.clone()
+      .resize({ width: SIZE_ZOOM, height: SIZE_ZOOM, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 75 })
+      .toBuffer();
 
-    // 3. Upload ke Supabase Storage (bucket: thumbs)
-    const path = `${clientId}/${fileId}.jpg`;
-    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/thumbs/${path}`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: 'Bearer ' + SUPABASE_KEY,
-        'Content-Type': 'image/jpeg',
-        'x-upsert': 'true'
-      },
-      body: outBuf
-    });
-    if (!up.ok) {
-      throw new Error('Supabase ' + up.status + ': ' + (await up.text()));
-    }
+    // 3. Upload keduanya ke Supabase Storage (bucket: thumbs)
+    const pathGaleri = `${clientId}/${fileId}.jpg`;
+    const pathZoom = `${clientId}/${fileId}-zoom.jpg`;
+    await uploadThumb(pathGaleri, galeri);
+    await uploadThumb(pathZoom, zoom);
 
     return {
       id: fileId,
       ok: true,
-      url: `${SUPABASE_URL}/storage/v1/object/public/thumbs/${path}`
+      url: `${SUPABASE_URL}/storage/v1/object/public/thumbs/${pathGaleri}`,
+      zoomUrl: `${SUPABASE_URL}/storage/v1/object/public/thumbs/${pathZoom}`
     };
   } catch (e) {
     console.error('thumb fail', fileId, e);
