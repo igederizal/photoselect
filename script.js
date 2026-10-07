@@ -200,16 +200,21 @@ function buildPicker(token) {
   const builder = new google.picker.PickerBuilder()
     .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
     .setTitle(pickerMode === 'folder'
-      ? 'Pilih 1 folder - semua foto di dalamnya akan diambil'
+      ? 'Klik 1x folder lalu Select untuk ambil semua isinya, atau klik 2x untuk masuk dan pilih sebagian'
       : 'Pilih foto - klik untuk memilih, Ctrl+klik untuk beberapa')
     .setOAuthToken(token)
     .setDeveloperKey(GOOGLE_API_KEY)
     .setCallback(onPickerCallback);
 
   if (pickerMode === 'folder') {
-    // Hanya folder: seluruh isi folder (rekursif) akan diambil
+    // Tampilkan folder DAN file di dalamnya, supaya bisa:
+    //   - klik 1x folder  -> Select  = ambil seluruh isi folder
+    //   - klik 2x folder  -> masuk   = pilih sebagian foto di dalamnya
     builder.addView(
-      new google.picker.DocsView(google.picker.ViewId.FOLDERS).setSelectFolderEnabled(true)
+      new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMimeTypes('application/vnd.google-apps.folder,image/jpeg,image/png,image/webp,image/gif,image/heic')
     );
   } else {
     // Hanya file: daftar foto satuan, bisa pilih beberapa
