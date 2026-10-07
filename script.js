@@ -10,6 +10,7 @@ const RENDER_BATCH = 60;  // foto per batch (biar HP tidak berat)
 let loadObserver = null;  // pemicu muat foto berikutnya saat scroll
 let pickerTargetId = null; // client yang sedang dipilihkan foto oleh admin
 let pickerToken = '';       // token untuk akses Drive API (baca isi folder)
+let pickerMode = 'photos';  // 'photos' = pilih foto satuan, 'folder' = import folder
 const MAX_PHOTOS = 5000;    // batas foto per client
 const GOOGLE_AUTH_TTL = 24 * 60 * 60 * 1000; // login Google admin berlaku 24 jam
 
@@ -87,7 +88,7 @@ if (cachedToken && !gAuthTime) gAuthTime = Date.now();
 const GOOGLE_CLIENT_ID = '382982310484-vjlock63pis42qe559rk04ie5uikj27s.apps.googleusercontent.com';
 const GOOGLE_API_KEY = 'AIzaSyAJRLdv3VKWh3EP1WiZxYUqE9rDYSaAAik';
 
-function openDrivePicker(clientId) {
+function openDrivePicker(clientId, mode) {
   if (!GOOGLE_API_KEY) {
     showModal('⚠️', 'API key Google belum diisi di script.js');
     return;
@@ -97,6 +98,7 @@ function openDrivePicker(clientId) {
     return;
   }
 
+  pickerMode = mode === 'folder' ? 'folder' : 'photos';
   pickerTargetId = clientId;
   pickerToken = '';
 
@@ -195,21 +197,28 @@ function showPicker(token) {
 }
 
 function buildPicker(token) {
-  const filesView = new google.picker.DocsView()
-    .setMimeTypes('image/jpeg,image/png,image/webp,image/gif,image/heic');
-
-  const foldersView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-    .setSelectFolderEnabled(true);
-
-  const picker = new google.picker.PickerBuilder()
+  const builder = new google.picker.PickerBuilder()
     .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
-    .setTitle('Pilih foto atau folder (semua foto dalam folder akan diambil)')
+    .setTitle(pickerMode === 'folder'
+      ? 'Pilih 1 folder - semua foto di dalamnya akan diambil'
+      : 'Pilih foto - klik untuk memilih, Ctrl+klik untuk beberapa')
     .setOAuthToken(token)
     .setDeveloperKey(GOOGLE_API_KEY)
-    .addView(filesView)
-    .addView(foldersView)
-    .setCallback(onPickerCallback)
-    .build();
+    .setCallback(onPickerCallback);
+
+  if (pickerMode === 'folder') {
+    // Hanya folder: seluruh isi folder (rekursif) akan diambil
+    builder.addView(
+      new google.picker.DocsView(google.picker.ViewId.FOLDERS).setSelectFolderEnabled(true)
+    );
+  } else {
+    // Hanya file: daftar foto satuan, bisa pilih beberapa
+    builder.addView(
+      new google.picker.DocsView().setMimeTypes('image/jpeg,image/png,image/webp,image/gif,image/heic')
+    );
+  }
+
+  const picker = builder.build();
   picker.setVisible(true);
 }
 
@@ -856,7 +865,8 @@ function renderClientList() {
       </div>
 
       <div class="photo-actions">
-        <button class="drive-btn" onclick="openDrivePicker(${client.id})">📷 Pilih Foto / Folder dari Drive</button>
+        <button class="drive-btn" onclick="openDrivePicker(${client.id}, 'photos')">📷 Pilih Foto</button>
+        <button class="drive-btn" onclick="openDrivePicker(${client.id}, 'folder')">📁 Import Folder</button>
         <span class="photo-count">🎞️ ${photoCount} foto diposting</span>
         ${photoCount > 0 ? `<button class="clear-photo-btn" onclick="clearClientPhotos(${client.id})">Kosongkan</button>` : ''}
       </div>
