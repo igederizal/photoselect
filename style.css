@@ -8,8 +8,12 @@
   --card: #211b16;
   --text: #f3ede4;
   --text2: #b7aa98;
+  /* warna gelap untuk teks di atas latar terang (tombol) */
+  --ink: #171310;
   --border: #3a3128;
   --accent: #b05c3f;
+  /* dipakai beberapa tempat sebagai ganti nama --text2 */
+  --dim2: #6f6459;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
