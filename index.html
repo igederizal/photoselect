@@ -120,17 +120,23 @@
     <!-- GALLERY (client)      -->
     <!-- ===================== -->
     <section id="section-gallery" class="tab-content hidden">
-      <div class="gallery-header">
-        <button onclick="logout()" class="back-btn">← Keluar</button>
-        <div class="folder-info">
-          <strong id="gallery-folder-name">Folder: ---</strong>
-          <span id="gallery-client-name" class="client-badge">Client: ---</span>
-          <span id="gallery-status" class="status-badge status-menunggu">Status: Menunggu</span>
+      <div class="gbar">
+        <div class="gbar-l">
+          <img src="logo-myhistoria.png" alt="">
+          <b>MYHISTORIA</b>
+          <span class="caps gbar-tag" id="gallery-client-name">Client</span>
+        </div>
+        <div class="gbar-r">
+          <span class="qty" id="select-count">0 dipilih</span>
+          <button onclick="logout()" class="ghost">Keluar</button>
+          <button onclick="submitSelection()" class="send-btn" id="submit-btn">Kirim Pilihan</button>
         </div>
       </div>
 
-      <div class="select-bar">
-        <span id="select-count">0 foto dipilih</span>
+      <div class="ghead">
+        <div class="caps" id="gallery-status">Status</div>
+        <h2>Pilih foto untuk<br>dicetak.</h2>
+        <p id="gallery-hint">Ketuk lingkaran di sudut foto untuk menandainya.</p>
       </div>
 
       <div id="file-grid" class="file-grid"></div>
@@ -141,12 +147,13 @@
       </div>
 
       <div class="note-section">
-        <h3>📝 Catatan untuk Editor</h3>
+        <h3>Catatan untuk Editor</h3>
         <textarea id="client-note" placeholder="Contoh: Tolong edit yang natural, jangan terlalu terang..."></textarea>
       </div>
 
       <div class="gallery-actions">
-        <button onclick="submitSelection()" class="submit-btn">✅ Kirim Pilihan ke Admin</button>
+        <span class="cnt-foot" id="foot-count">0 dipilih</span>
+        <button onclick="submitSelection()" class="send-btn">Kirim Pilihan ke Admin</button>
       </div>
     </section>
   </div>
@@ -160,17 +167,23 @@
     </div>
   </div>
 
-  <!-- ZOOM FOTO -->
-  <div id="zoom-overlay" class="zoom-overlay hidden" onclick="closeZoom()">
-    <div class="zoom-box">
-      <img id="zoom-img" alt="">
-      <div class="zoom-footer">
-        <span id="zoom-name"></span>
-        <span id="zoom-loading" class="zoom-loading hidden">⏳ Memuat versi besar...</span>
-        <button onclick="closeZoom()" class="zoom-close">✕ Tutup</button>
+<!-- LIGHTBOX FOTO -->
+<div id="zoom-overlay" class="zoom-overlay hidden" onclick="if(event.target===this)closeZoom()">
+  <div class="zoom-box">
+    <img id="zoom-img" alt="">
+    <div class="zoom-footer">
+      <span id="zoom-name"></span>
+      <span id="zoom-loading" class="zoom-loading hidden">Memuat versi besar...</span>
+      <div class="zoom-acts">
+        <button id="zoom-pick" class="zoom-pick" onclick="event.stopPropagation();zoomPick()">Pilih</button>
+        <button onclick="closeZoom()" class="zoom-close">Tutup</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast-box"></div>
 
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>

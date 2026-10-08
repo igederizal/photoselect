@@ -463,9 +463,10 @@ async function clientLogin() {
 // =====================
 // TRANSISI HALAMAN
 // =====================
-// Header hanya muncul di panel admin & galeri, tidak di halaman login
+// Header hanya muncul di panel admin. Halaman login dan galeri punya header sendiri.
 function setView(view) {
   document.body.classList.toggle('view-login', view === 'login');
+  document.body.classList.toggle('view-gallery', view === 'gallery');
 }
 
 // Mengganti isi layar dengan fade singkat supaya tidak "lompat"
@@ -998,12 +999,10 @@ function togglePassword(id) {
 function showGallery(client) {
   setView('gallery');
   document.getElementById('section-gallery').classList.remove('hidden');
-  document.getElementById('gallery-folder-name').textContent = `📁 ${client.folder}`;
-  document.getElementById('gallery-client-name').textContent = `Client: ${client.name}`;
+  document.getElementById('gallery-client-name').textContent = client.name;
 
   const statusEl = document.getElementById('gallery-status');
-  statusEl.textContent = `Status: ${client.status}`;
-  statusEl.className = 'status-badge status-' + client.status.toLowerCase();
+  statusEl.textContent = client.status;
 
   // Pool foto = yang diposting admin
   const photos = client.photos || [];
@@ -1015,6 +1014,14 @@ function showGallery(client) {
   selectedFiles = savedIds.filter(id => currentPhotos.some(p => p.id === id));
 
   document.getElementById('client-note').value = client.note || '';
+
+  const max = (client.max_select) || 0;
+  const hint = document.getElementById('gallery-hint');
+  if (hint) {
+    hint.innerHTML = max > 0
+      ? 'Ketuk lingkaran di sudut foto untuk menandainya \u2014 batas <strong>' + max + ' foto</strong>.'
+      : 'Ketuk lingkaran di sudut foto untuk menandainya.';
+  }
 
   renderFileGrid();
   updateSelectCount();
@@ -1030,16 +1037,15 @@ function fileCardHtml(p) {
   const thumbHtml = p.thumb || p.id
     ? `<img src="${esc(p.thumb || fallback)}" alt="${safeName}" loading="lazy" decoding="async"
                onerror="this.onerror=null;this.src='${fallback}'">`
-    : '📷';
+    : '';
+  // dua target terpisah: lingkaran = pilih/lepas, area foto = perbesar
   return `
-    <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${esc(p.id)}" onclick="toggleSelect('${esc(p.id)}')">
-      <div class="check-mark">✓</div>
-      <button class="zoom-btn" title="Perbesar"
-              onclick="event.stopPropagation(); zoomPhoto('${esc(p.id)}')">🔍</button>
+    <div class="file-card ${isSelected ? 'selected' : ''}" data-id="${esc(p.id)}"
+         onclick="zoomPhoto('${esc(p.id)}')" title="Perbesar">
+      <div class="check-mark" title="Pilih / lepas foto ini"
+           onclick="event.stopPropagation(); toggleSelect('${esc(p.id)}')"></div>
       <div class="file-thumb">${thumbHtml}</div>
-      <div class="file-info">
-        <div class="fname">${safeName}</div>
-      </div>
+      <div class="file-info"><div class="fname">${safeName}</div></div>
     </div>`;
 }
 
@@ -1117,15 +1123,18 @@ function setupLoadObserver() {
 // =====================
 // ZOOM FOTO (pratinjau layar penuh)
 // =====================
+let zoomId = null;   // foto yang sedang dibuka di lightbox
+
 function zoomPhoto(fileId) {
   const p = currentPhotos.find(x => x.id === fileId);
   if (!p) return;
+  zoomId = fileId;
 
   const img = document.getElementById('zoom-img');
   const loading = document.getElementById('zoom-loading');
   const fallback = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(p.id) + '&sz=w1024';
 
-  // Tampilkan versi besar (2000px) kalau ada, kalau belum pakai pratinjau
+  // Tampilkan versi besar kalau ada, kalau belum pakai pratinjau
   if (p.zoom) {
     if (loading) loading.classList.remove('hidden');
     img.onload = () => { if (loading) loading.classList.add('hidden'); };
@@ -1142,6 +1151,34 @@ function zoomPhoto(fileId) {
 
   document.getElementById('zoom-name').textContent = p.name;
   document.getElementById('zoom-overlay').classList.remove('hidden');
+  zoomSyncPick();
+}
+
+// geser ke foto sebelum / sesudah (dalam urutan pool yang tampil)
+function zoomStep(dir) {
+  if (!zoomId) return;
+  const i = currentPhotos.findIndex(p => p.id === zoomId);
+  if (i < 0) return;
+  const next = currentPhotos[(i + dir + currentPhotos.length) % currentPhotos.length];
+  zoomPhoto(next.id);
+}
+
+// tombol "Pilih" di lightbox mengikuti status kartu yang sama
+function zoomSyncPick() {
+  const btn = document.getElementById('zoom-pick');
+  if (!btn) return;
+  const on = !!zoomId && selectedFiles.includes(zoomId);
+  const max = selectMax();
+  const penuh = max > 0 && !on && selectedFiles.length >= max;
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? 'Lepas' : 'Pilih';
+  btn.disabled = penuh;
+  btn.title = penuh ? `Batas ${max} foto sudah tercapai` : '';
+}
+
+function zoomPick() {
+  if (!zoomId) return;
+  toggleSelect(zoomId);
 }
 
 function closeZoom() {
@@ -1153,7 +1190,16 @@ function closeZoom() {
   img.onerror = null;
   img.src = '';
   if (loading) loading.classList.add('hidden');
+  zoomId = null;
 }
+
+document.addEventListener('keydown', function (e) {
+  const overlay = document.getElementById('zoom-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  if (e.key === 'Escape') closeZoom();
+  else if (e.key === 'ArrowLeft') zoomStep(-1);
+  else if (e.key === 'ArrowRight') zoomStep(1);
+});
 
 // =====================
 // TOGGLE PILIH FOTO
@@ -1163,26 +1209,45 @@ function toggleSelect(fileId) {
   if (idx >= 0) {
     selectedFiles.splice(idx, 1);
   } else {
-    const max = (currentClient && currentClient.max_select) || 0;
+    const max = selectMax();
     if (max > 0 && selectedFiles.length >= max) {
-      showModal('⚠️', `Maksimal ${max} foto yang bisa dipilih.\n\nBatalkan salah satu pilihan dulu untuk mengganti.`);
+      showToast(`Batas ${max} foto sudah tercapai`, true);
+      shakeSubmit();
       return;
     }
     selectedFiles.push(fileId);
+    if (max > 0 && selectedFiles.length === max) showToast(`Batas ${max} foto tercapai`);
   }
 
   // Update kartu saja (tanpa render ulang — cepat untuk ribuan foto)
   const card = document.querySelector(`.file-card[data-id="${fileId}"]`);
   if (card) card.classList.toggle('selected', selectedFiles.includes(fileId));
   updateSelectCount();
+  zoomSyncPick();
+}
+
+function selectMax() {
+  return (currentClient && currentClient.max_select) || 0;
+}
+
+function shakeSubmit() {
+  const btn = document.getElementById('submit-btn');
+  if (!btn) return;
+  btn.animate(
+    [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' },
+     { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }],
+    { duration: 320, easing: 'ease-in-out' }
+  );
 }
 
 function updateSelectCount() {
-  const max = (currentClient && currentClient.max_select) || 0;
+  const max = selectMax();
   const label = max > 0
-    ? `${selectedFiles.length} / ${max} foto dipilih`
-    : `${selectedFiles.length} foto dipilih`;
+    ? `${selectedFiles.length} / ${max} dipilih`
+    : `${selectedFiles.length} dipilih`;
   document.getElementById('select-count').textContent = label;
+  const foot = document.getElementById('foot-count');
+  if (foot) foot.textContent = label;
 }
 
 // =====================
@@ -1287,10 +1352,12 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 });
 
-function showToast(message) {
-  const el = document.createElement('div');
-  el.className = 'toast';
+let toastTimer = null;
+function showToast(message, isBad) {
+  const el = document.getElementById('toast');
+  if (!el) return;
   el.textContent = message;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  el.className = 'toast-box on' + (isBad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast-box'; }, 2400);
 }
