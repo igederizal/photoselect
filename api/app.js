@@ -86,7 +86,8 @@ function publicClient(c) {
     photos: c.photos || [],
     selected_files: c.selected_files || [],
     submitted: !!c.submitted,
-    max_select: c.max_select || 0
+    max_select: c.max_select || 0,
+    deadline: c.deadline || null
   };
 }
 
@@ -285,6 +286,18 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, max_select: n });
       }
 
+      // batas waktu pilihan client (kosong = tanpa batas)
+      if (action === 'admin_set_deadline') {
+        let dl = null;
+        if (body.deadline) {
+          dl = new Date(body.deadline);
+          if (isNaN(dl.getTime())) return res.status(400).json({ error: 'Tanggal tidak valid' });
+        }
+        const { error } = await db.from('clients').update({ deadline: dl }).eq('id', id);
+        if (error) throw new Error('DB: ' + error.message);
+        return res.status(200).json({ ok: true, deadline: dl });
+      }
+
       if (action === 'admin_save_photos') {
         const arr = Array.isArray(body.photos) ? body.photos.slice(0, MAX_PHOTOS) : [];
         const photos = arr
@@ -413,6 +426,11 @@ module.exports = async function handler(req, res) {
       const max = c.max_select || 0;
       if (max > 0 && chosen.length > max) {
         return res.status(400).json({ error: `Batas maksimal ${max} foto` });
+      }
+
+      // kalau admin menetapkan batas waktu, tolak pilihan yang masuk setelah lewat
+      if (c.deadline && new Date(c.deadline).getTime() < Date.now()) {
+        return res.status(400).json({ error: 'Batas waktu memilih foto sudah lewat' });
       }
 
       const note = str(body.note, MAX_NOTE).trim();

@@ -611,6 +611,14 @@ body.view-admin .app-container { padding: 0; max-width: none; }
   white-space: nowrap;
 }
 
+/* hitung mundur batas waktu (hanya muncul bila admin mengaturnya) */
+.countdown { display: flex; align-items: baseline; gap: 8px; font-size: 10px;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--text2); white-space: nowrap; }
+.countdown b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 16px;
+  font-weight: 400; letter-spacing: 0.06em; color: var(--primary); text-transform: uppercase; }
+.countdown.pasti b { color: var(--danger); }
+.numbox[type="date"] { width: 165px; }
+
 .ghost {
   padding: 9px 16px;
   background: transparent;

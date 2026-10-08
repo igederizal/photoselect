@@ -657,6 +657,34 @@ async function changeStatus(id, newStatus) {
 }
 
 // =====================
+// ADMIN: BATAS WAKTU PILIHAN CLIENT
+// =====================
+async function setDeadline(id, value) {
+  const client = clients.find(c => String(c.id) === String(id));
+  if (!client) return;
+
+  let deadline = null;
+  if (value) {
+    // input type=date tidak punya jam; pakai akhir hari agar tidak cutoff di pagi hari
+    const d = new Date(value + 'T23:59:59');
+    if (isNaN(d.getTime())) { showToast('Tanggal tidak valid', true); return; }
+    deadline = d.toISOString();
+  }
+
+  try {
+    await api('admin_set_deadline', { id: id, deadline: deadline });
+  } catch (e) {
+    showToast('Gagal menyimpan batas waktu: ' + e.message, true);
+    return;
+  }
+
+  client.deadline = deadline;
+  renderClientList();
+  if (CD_ID !== null) openClientDetail(id);
+  showToast(deadline ? 'Batas waktu disimpan' : 'Batas waktu dihapus');
+}
+
+// =====================
 // ADMIN: KOSONGKAN FOTO CLIENT
 // =====================
 async function clearClientPhotos(id) {
@@ -994,6 +1022,19 @@ function openClientDetail(id) {
     photoCount > 0 ? photoCount + ' foto terposting ke client ini.' : 'Belum ada foto diposting.';
   document.getElementById('cd-max').value = c.max_select || 0;
 
+  // batas waktu (kalau diisi, tampil hitung mundur)
+  const dlEl = document.getElementById('cd-deadline');
+  const dlHint = document.getElementById('cd-deadline-hint');
+  if (c.deadline) {
+    const d = new Date(c.deadline);
+    dlEl.value = isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+    dlHint.textContent = 'Client harus selesai sebelum ' +
+      d.toLocaleString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } else {
+    dlEl.value = '';
+    dlHint.textContent = 'Belum ada batas waktu untuk client ini.';
+  }
+
   // tombol folder Drive hanya relevan kalau client sudah kirim & sudah ada salinan
   const punyaSalinan = c.submitted && files.length > 0;
   document.getElementById('cd-copy-btn').style.display = punyaSalinan ? '' : 'none';
@@ -1112,6 +1153,39 @@ function showGallery(client) {
 
   renderFileGrid();
   updateSelectCount();
+  setupDeadlineClock();
+}
+
+// =====================
+// HITUNG MUNDUR BATAS WAKTU (client)
+// =====================
+let dlTimer = null;
+
+function setupDeadlineClock() {
+  clearInterval(dlTimer);
+  const box = document.getElementById('client-deadline');
+  const out = document.getElementById('dl-clock');
+  if (!box || !out) return;
+
+  const dl = currentClient && currentClient.deadline ? new Date(currentClient.deadline) : null;
+  if (!dl || isNaN(dl.getTime())) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+
+  const tick = () => {
+    const ms = dl.getTime() - Date.now();
+    if (ms <= 0) {
+      out.textContent = 'Ditutup';
+      box.classList.add('pasti');
+      return;
+    }
+    const d = Math.floor(ms / 864e5);
+    const h = Math.floor(ms % 864e5 / 36e5);
+    const m = Math.floor(ms % 36e5 / 6e4);
+    out.textContent = d + 'h ' + String(h).padStart(2, '0') + 'j ' + String(m).padStart(2, '0') + 'm';
+    box.classList.toggle('pasti', d < 2);
+  };
+  tick();
+  dlTimer = setInterval(tick, 30000);
 }
 
 // =====================
@@ -1400,6 +1474,7 @@ function logout() {
   document.getElementById('client-password').value = '';
   document.getElementById('client-password').classList.remove('bad');
   document.getElementById('login-error').classList.add('hidden');
+  clearInterval(dlTimer);
   setView('login');
   switchSection('section-login');
 }

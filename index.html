@@ -210,6 +210,16 @@
           </div>
         </div>
 
+        <div class="cd-blk">
+          <div class="cd-l">Batas Waktu Memilih</div>
+          <div class="cd-row">
+            <input type="date" class="numbox" id="cd-deadline" onchange="setDeadline(CD_ID, this.value)">
+            <button class="btn q sm" onclick="setDeadline(CD_ID,'')">Hapus batas</button>
+            <span class="cd-hint">Kosong berarti client bebas memilih kapan saja</span>
+          </div>
+          <div class="cd-hint" id="cd-deadline-hint"></div>
+        </div>
+
         <div class="cd-acts">
           <button class="btn" id="cd-copy-btn" onclick="copySelectedToDrive(CD_ID)">Salin ke Folder Drive</button>
           <a class="btn q" id="cd-folder-link" href="#" target="_blank" rel="noopener">Buka Folder di Drive</a>
@@ -231,6 +241,7 @@
           <span class="caps gbar-tag" id="gallery-client-name">Client</span>
         </div>
         <div class="gbar-r">
+          <span class="countdown hidden" id="client-deadline">Batas <b id="dl-clock"></b></span>
           <span class="qty" id="select-count">0 dipilih</span>
           <button onclick="logout()" class="ghost">Keluar</button>
           <button onclick="submitSelection()" class="send-btn" id="submit-btn">Kirim Pilihan</button>
