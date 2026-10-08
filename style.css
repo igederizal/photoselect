@@ -908,30 +908,33 @@ header .brand-tagline {
 .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* NOTE DISPLAY (di admin) */
+/* kontras dinaikkan: teks utama pakai --text (terang penuh),
+   latar dibuat lebih pekat supaya teks tidak tenggelam */
 .note-box {
-  background: rgba(243, 156, 18, 0.10);
+  background: rgba(243, 156, 18, 0.16);
   border-left: 3px solid var(--warning);
-  padding: 8px 12px;
+  padding: 12px 15px;
   border-radius: 0 6px 6px 0;
-  font-size: 13px;
-  color: var(--text2);
-  margin-top: 6px;
-  font-style: italic;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+  margin-top: 8px;
 }
 .note-box .no-note {
-  color: #999;
-  font-style: normal;
+  color: var(--text2);
+  font-size: 13px;
 }
 
 /* SELECTED FILES INFO */
 .selected-info {
-  background: rgba(52, 168, 83, 0.06);
-  border-left: 3px solid rgba(52, 168, 83, 0.5);
-  padding: 8px 12px;
+  background: rgba(52, 168, 83, 0.10);
+  border-left: 3px solid rgba(52, 168, 83, 0.6);
+  padding: 10px 15px;
   border-radius: 0 6px 6px 0;
   font-size: 13px;
-  color: #9fb4a5;
-  margin-top: 6px;
+  line-height: 1.6;
+  color: #b9d4bf;
+  margin-top: 8px;
 }
 
 /* DANGER ZONE */
