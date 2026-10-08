@@ -636,13 +636,23 @@ body.view-admin .app-container { padding: 0; max-width: none; }
 .countdown.pasti b { color: var(--danger); }
 .numbox[type="date"] { width: 165px; }
 
-/* nama client di bar atas dipotong, bukan menabrak tombol */
+/* nama client di bar atas: serif tipis dengan jarak huruf longgar supaya
+   terbaca sebagai refined, bukan menumpuk. Dipotong, bukan menabrak tombol. */
 #gallery-client-name {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 19px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--text2);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
-  max-width: 220px;
+  max-width: 260px;
+  align-self: center;
+}
 }
 
 .ghost {
