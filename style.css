@@ -591,14 +591,27 @@ body.view-admin .app-container { padding: 0; max-width: none; }
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
 }
-.gbar-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.gbar-l img { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(200,151,63,0.4); }
+/* sisi kiri boleh menyusut dan memotong teksnya, supaya tidak menabrak
+   tombol di sisi kanan saat layar sempit */
+.gbar-l {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.gbar-l img { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(200,151,63,0.4); flex-shrink: 0; }
 .gbar-l b {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-weight: 400;
   font-size: 16px;
   letter-spacing: 0.18em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .gbar-tag {
   margin-left: 6px;
@@ -622,6 +635,15 @@ body.view-admin .app-container { padding: 0; max-width: none; }
   font-weight: 400; letter-spacing: 0.06em; color: var(--primary); text-transform: uppercase; }
 .countdown.pasti b { color: var(--danger); }
 .numbox[type="date"] { width: 165px; }
+
+/* nama client di bar atas dipotong, bukan menabrak tombol */
+#gallery-client-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 220px;
+}
 
 .ghost {
   padding: 9px 16px;
@@ -1310,12 +1332,17 @@ body.view-admin .app-container { padding: 0; max-width: none; }
 }
 
 @media (max-width: 680px) {
-  .gbar { padding: 12px 16px; gap: 10px; }
-  .gbar-l b { font-size: 14px; letter-spacing: 0.12em; }
+  .gbar { padding: 12px 14px; gap: 8px; }
+  .gbar-l { flex: 0 1 auto; gap: 8px; }
+  .gbar-l b { font-size: 13px; letter-spacing: 0.1em; }
+  /* nama client disembunyikan di layar kecil; baris detail admin tetap
+     menampilkan namanya, jadi tidak ada informasi yang hilang total */
   .gbar-tag { display: none; }
-  .gbar-r { gap: 10px; }
+  .gbar-r { gap: 8px; flex-shrink: 0; }
   .qty { display: none; }
-  .send-btn { padding: 10px 14px; font-size: 9px; letter-spacing: 0.16em; }
+  .countdown { display: none; }
+  .ghost { padding: 8px 11px; font-size: 9px; letter-spacing: 0.14em; }
+  .send-btn { padding: 10px 13px; font-size: 9px; letter-spacing: 0.14em; }
   .ghead { padding: 44px 20px 30px; }
   .file-grid { grid-template-columns: repeat(3, 1fr); padding: 0 20px; gap: 5px; }
   .gallery-actions { padding: 24px 20px 56px; flex-direction: column; text-align: center; }
