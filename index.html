@@ -11,10 +11,10 @@
   <link rel="icon" href="logo-myhistoria.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@200;300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=2">
 </head>
-<body>
+<body class="view-login">
   <div class="app-container">
     <header>
       <div class="brand-logos">
@@ -29,17 +29,29 @@
     <!-- ===================== -->
     <!-- LOGIN (tunggal)       -->
     <!-- ===================== -->
-    <section id="section-login" class="tab-content">
-      <div class="login-card">
-        <h2>Masuk</h2>
-        <p class="subtitle">Masukkan password client atau admin</p>
+    <section id="section-login" class="tab-content login-split">
+      <div class="login-brand">
+        <div class="lb-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="caps">Portal Seleksi Foto</div>
+        <h1>MY<br>HISTORIA</h1>
+        <div class="lb-rule"></div>
+        <p>Wedding &amp; Event Content Creator.<br>
+           Foto acara Anda telah selesai diedit dan siap dipilih untuk dicetak.</p>
+      </div>
 
-        <input type="password" id="client-password" placeholder="Masukkan password"
-               onkeypress="if(event.key==='Enter')clientLogin()">
+      <div class="login-panel">
+        <div class="login-card">
+          <h2>Masuk</h2>
+          <p class="subtitle">Masukkan password client atau admin</p>
 
-        <button onclick="clientLogin()" class="login-btn">Masuk</button>
+          <input type="password" id="client-password" placeholder="• • • • • • • •"
+                 autocomplete="off" onkeypress="if(event.key==='Enter')clientLogin()">
 
-        <p id="login-error" class="login-error hidden">❌ Password salah! Coba lagi.</p>
+          <button onclick="clientLogin()" class="login-btn">Masuk</button>
+
+          <p id="login-error" class="login-error hidden"></p>
+          <p class="login-hint">Password dikirim ke WhatsApp Anda.</p>
+        </div>
       </div>
     </section>
 

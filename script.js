@@ -421,13 +421,15 @@ async function clientLogin() {
   const errorEl = document.getElementById('login-error');
 
   if (!input) {
-    errorEl.textContent = '❌ Masukkan password dulu!';
+    errorEl.textContent = 'Masukkan password dulu';
     errorEl.classList.remove('hidden');
     return;
   }
 
   errorEl.classList.add('hidden');
-  document.getElementById('client-password').value = '';
+  const pwField = document.getElementById('client-password');
+  pwField.classList.remove('bad');
+  pwField.value = '';
 
   // 1. Coba sebagai admin
   try {
@@ -447,22 +449,60 @@ async function clientLogin() {
     localStorage.setItem('mh_client_token', clientToken);
     clearAdminSession();
     currentClient = r.client;
-    document.getElementById('section-login').classList.add('hidden');
+    setView('gallery');
+    switchSection('section-gallery');
     showGallery(currentClient);
     return;
   } catch (e) {
-    errorEl.textContent = '❌ Password salah! Coba lagi.';
+    errorEl.textContent = 'Password salah, coba lagi';
     errorEl.classList.remove('hidden');
+    document.getElementById('client-password').classList.add('bad');
   }
+}
+
+// =====================
+// TRANSISI HALAMAN
+// =====================
+// Header hanya muncul di panel admin & galeri, tidak di halaman login
+function setView(view) {
+  document.body.classList.toggle('view-login', view === 'login');
+}
+
+// Mengganti isi layar dengan fade singkat supaya tidak "lompat"
+function switchSection(target) {
+  const login = document.getElementById('section-login');
+  const admin = document.getElementById('section-admin');
+  const gallery = document.getElementById('section-gallery');
+  const next = document.getElementById(target);
+  const current = [login, admin, gallery].find(s => s && !s.classList.contains('hidden'));
+
+  if (current === next) return;
+  if (!current || !next) {
+    [login, admin, gallery].forEach(s => s && s.classList.add('hidden'));
+    if (next) next.classList.remove('hidden');
+    return;
+  }
+
+  current.style.opacity = '0';
+  setTimeout(() => {
+    current.classList.add('hidden');
+    current.style.opacity = '';
+    next.classList.remove('hidden');
+    window.scrollTo(0, 0);
+    next.style.opacity = '0';
+    // paksa reflow supaya transisi opacity benar-benar jalan
+    void next.offsetHeight;
+    next.style.transition = 'opacity 0.4s ease';
+    next.style.opacity = '1';
+  }, 260);
 }
 
 // =====================
 // BUKA PANEL ADMIN
 // =====================
 function openAdmin() {
-  document.getElementById('section-login').classList.add('hidden');
-  document.getElementById('section-gallery').classList.add('hidden');
-  document.getElementById('section-admin').classList.remove('hidden');
+  setView('admin');
+  switchSection('section-admin');
   renderClientList();
   updateGoogleAuthStatus();
 }
@@ -470,9 +510,10 @@ function openAdmin() {
 function adminLogout() {
   api('admin_logout').catch(() => {});
   clearAdminSession();
-  document.getElementById('section-admin').classList.add('hidden');
-  document.getElementById('section-login').classList.remove('hidden');
+  setView('login');
+  switchSection('section-login');
   document.getElementById('client-password').value = '';
+  document.getElementById('login-error').classList.add('hidden');
 }
 
 async function changeAdminPassword() {
@@ -955,6 +996,7 @@ function togglePassword(id) {
 // TAMPILKAN GALLERY
 // =====================
 function showGallery(client) {
+  setView('gallery');
   document.getElementById('section-gallery').classList.remove('hidden');
   document.getElementById('gallery-folder-name').textContent = `📁 ${client.folder}`;
   document.getElementById('gallery-client-name').textContent = `Client: ${client.name}`;
@@ -1194,8 +1236,10 @@ function logout() {
   api('client_logout').catch(() => {});
   clearClientSession();
   document.getElementById('client-password').value = '';
-  document.getElementById('section-gallery').classList.add('hidden');
-  document.getElementById('section-login').classList.remove('hidden');
+  document.getElementById('client-password').classList.remove('bad');
+  document.getElementById('login-error').classList.add('hidden');
+  setView('login');
+  switchSection('section-login');
 }
 
 // =====================
@@ -1234,6 +1278,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       const r = await api('client_session');
       currentClient = r.client;
       loginEl.classList.add('hidden');
+      setView('gallery');
       showGallery(currentClient);
       return;
     } catch (e) {

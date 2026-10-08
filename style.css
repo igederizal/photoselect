@@ -83,54 +83,104 @@ header .brand-tagline {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* LOGIN CARD */
-.login-card {
-  background: var(--card);
-  padding: 35px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  text-align: center;
-  max-width: 450px;
-  margin: 0 auto;
+/* LOGIN: panel kiri tipografi brand, panel kanan form */
+.login-split {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  min-height: 100vh;
+  margin: -20px;
 }
-.login-card h2 { font-size: 20px; margin-bottom: 6px; }
-.subtitle { color: var(--text2); font-size: 13px; margin-bottom: 25px; }
+
+.login-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vw 5vw;
+  background:
+    radial-gradient(ellipse at 30% 25%, rgba(200,151,63,0.10), transparent 60%),
+    linear-gradient(160deg, #14110f 0%, #0d0b0a 100%);
+  border-right: 1px solid var(--border);
+}
+.lb-dots { display: flex; gap: 7px; margin-bottom: auto; padding-bottom: 40px; }
+.lb-dots i { width: 22px; height: 1px; background: rgba(245,240,232,0.22); display: block; }
+.lb-dots i:first-child { background: var(--primary); width: 38px; }
+.login-brand .caps { margin-bottom: 22px; }
+.login-brand h1 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 200;
+  font-size: clamp(46px, 7vw, 92px);
+  letter-spacing: 0.18em;
+  line-height: 0.98;
+  margin-bottom: 22px;
+}
+.lb-rule { width: 52px; height: 1px; background: var(--primary); margin: 28px 0; }
+.login-brand p { color: var(--text2); font-size: 13px; line-height: 1.95; max-width: 340px; }
+
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vw 5vw;
+}
+
+.login-card { width: 100%; max-width: 400px; text-align: center; }
+.login-card h2 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 300;
+  font-size: 30px;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.subtitle { color: var(--text2); font-size: 12px; margin-bottom: 34px; letter-spacing: 0.04em; }
 
 .login-card input {
   width: 100%;
-  padding: 14px 18px;
-  border: 2px solid var(--border);
-  border-radius: 8px;
-  font-size: 18px;
-  font-family: 'Courier New', monospace;
-  letter-spacing: 2px;
+  padding: 16px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 26px;
+  letter-spacing: 0.32em;
   text-align: center;
   outline: none;
-  margin-bottom: 15px;
-  transition: border-color 0.2s;
+  transition: border-color 0.3s;
 }
 .login-card input:focus { border-color: var(--primary); }
+.login-card input.bad { border-color: var(--danger); }
 
 .login-btn {
   width: 100%;
-  padding: 14px;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
+  margin-top: 34px;
+  padding: 17px;
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 10px;
   font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.3s, color 0.3s;
 }
-.login-btn:hover { background: var(--primary-dark); }
+.login-btn:hover { background: var(--primary); color: var(--ink); }
+.login-btn[disabled] { opacity: 0.45; cursor: wait; }
 
 .login-error {
-  margin-top: 15px;
+  margin-top: 20px;
   color: var(--danger);
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
+.login-hint { margin-top: 26px; color: #6f6459; font-size: 10px; }
+
+/* Header disembunyikan saat di halaman login */
+body.view-login header { display: none; }
+body.view-login .app-container { padding: 0; max-width: none; }
 
 /* ADMIN CARDS */
 .admin-card {
@@ -961,10 +1011,21 @@ header .brand-tagline {
 }
 
 /* RESPONSIVE */
+@media (max-width: 900px) {
+  .login-split { grid-template-columns: 1fr; min-height: 100vh; }
+  .login-brand { padding: 44px 8vw 34px; border-right: none; border-bottom: 1px solid var(--border); }
+  .lb-dots { display: none; }
+  .login-brand h1 { font-size: clamp(40px, 13vw, 64px); }
+  .login-brand p { max-width: none; }
+  .login-panel { padding: 44px 8vw 60px; }
+}
+
 @media (max-width: 500px) {
   header h1 { font-size: 20px; }
   .add-client-form { flex-direction: column; }
   .change-pw-form { flex-direction: column; }
   .client-row { flex-direction: column; align-items: flex-start; }
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .login-brand h1 { letter-spacing: 0.12em; }
+  .login-card input { font-size: 22px; letter-spacing: 0.24em; }
 }
