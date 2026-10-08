@@ -59,62 +59,166 @@
     <!-- PANEL ADMIN           -->
     <!-- ===================== -->
     <section id="section-admin" class="tab-content hidden">
-      <div class="admin-topbar">
-        <div class="admin-status">
-          <span class="admin-dot"></span>
-          <span>Admin Mode Aktif</span>
+      <div class="adm-top">
+        <div class="gbar-l">
+          <img src="logo-myhistoria.png" alt="">
+          <b>MYHISTORIA</b>
+          <span class="caps gbar-tag">Panel Admin</span>
         </div>
-        <button onclick="adminLogout()" class="admin-logout-btn">← Keluar</button>
-      </div>
-
-      <div class="admin-card">
-        <h2>Tambah Client Baru</h2>
-        <div class="add-client-form">
-          <input type="text" id="new-client-name" placeholder="Nama client (contoh: Budi)">
-          <button onclick="addClient()" class="add-btn">+ Tambah & Generate Password</button>
-        </div>
-        <p id="admin-message" class="admin-message hidden"></p>
-      </div>
-
-      <div class="admin-card">
-        <h2>Ubah Password Admin</h2>
-        <p class="subtitle">Isi password admin saat ini, lalu password baru · klik 👁 untuk melihat</p>
-        <div class="change-pw-form">
-          <span class="pw-field">
-            <input type="password" id="current-admin-pw" placeholder="Password admin sekarang" autocomplete="off">
-            <button type="button" class="pw-eye-btn" onclick="toggleInputPw('current-admin-pw', this)" title="Lihat password">👁</button>
-          </span>
-          <span class="pw-field">
-            <input type="password" id="new-admin-pw" placeholder="Password baru (min. 6 karakter)" autocomplete="off">
-            <button type="button" class="pw-eye-btn" onclick="toggleInputPw('new-admin-pw', this)" title="Lihat password">👁</button>
-          </span>
-          <button onclick="changeAdminPassword()" class="change-btn">Ubah</button>
+        <div class="gbar-r">
+          <span class="live"><i></i>Tersambung</span>
+          <button onclick="adminLogout()" class="ghost">Keluar</button>
         </div>
       </div>
 
-      <div class="admin-card">
-        <h2>Akun Google Drive</h2>
-        <p class="subtitle">Dipakai untuk mengambil foto dari Drive Anda. Login berlaku 24 jam.<br>
-          <strong>📷 Pilih Foto</strong> = pilih foto satuan · <strong>📁 Import Folder</strong> = masuk ke folder lalu pilih isinya</p>
-        <div class="change-pw-form">
-          <span id="gauth-status" class="gauth-status">—</span>
-          <button onclick="changeGoogleAccount()" class="change-btn">Ganti Akun</button>
-        </div>
-      </div>
-
-      <div class="admin-card">
-        <h2>Daftar Client & Password</h2>
-        <p class="subtitle">Klik password untuk copy · Klik status untuk ubah</p>
-
-        <div id="client-list" class="client-list">
-          <p class="empty-msg">Belum ada client. Tambahkan client baru di atas.</p>
+      <div class="awrap">
+        <div class="ahead">
+          <h1 id="admin-headline">Memuat data…</h1>
+          <p>Salin foto terpilih ke folder Drive, ubah status, atau atur ulang password —
+             semuanya lewat satu panel.</p>
         </div>
 
-        <div class="danger-zone">
-          <button onclick="clearAllData()" class="clear-all-btn">🗑️ Hapus Semua Data Client</button>
+        <div class="stats" id="admin-stats">
+          <div class="stat"><div class="n" id="st-total">0</div><div class="l">Total Client</div></div>
+          <div class="stat hl"><div class="n" id="st-menunggu">0</div><div class="l">Menunggu</div></div>
+          <div class="stat"><div class="n" id="st-diproses">0</div><div class="l">Diproses</div></div>
+          <div class="stat"><div class="n" id="st-foto">0</div><div class="l">Foto Diposting</div></div>
         </div>
+
+        <div class="band add">
+          <div class="band-l">
+            <h3>Client Baru</h3>
+            <div class="sub">Password dibuat otomatis dan langsung bisa disalin.</div>
+          </div>
+          <div class="band-body">
+            <div class="field">
+              <input type="text" id="new-client-name" placeholder="Nama client, contoh: Budi"
+                     onkeypress="if(event.key==='Enter')addClient()">
+              <button onclick="addClient()" class="btn">Tambah</button>
+            </div>
+          </div>
+          <p id="admin-message" class="admin-message hidden"></p>
+        </div>
+
+        <div class="band">
+          <div class="band-l">
+            <h3>Pengaturan</h3>
+            <div class="sub">Berlaku otomatis, tidak perlu klik simpan.</div>
+          </div>
+          <div class="set-body">
+            <div class="row">
+              <div>
+                <div class="t">Google Drive</div>
+                <div class="d" id="gauth-status">\u2014</div>
+              </div>
+              <button onclick="changeGoogleAccount()" class="eye" title="Ganti akun">&#8646;</button>
+            </div>
+            <div class="row">
+              <div>
+                <div class="t">Password admin</div>
+                <div class="d">Minimal 6 karakter</div>
+              </div>
+              <button onclick="togglePwForm()" class="eye" title="Ubah password">&#9670;</button>
+            </div>
+            <div class="row">
+              <div>
+                <div class="t">Hapus semua data</div>
+                <div class="d">Tidak bisa dibatalkan</div>
+              </div>
+              <button onclick="clearAllData()" class="eye danger" title="Hapus semua">&#128465;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="band pwband hidden" id="pwband">
+          <div class="band-body">
+            <span class="pw-field">
+              <input type="password" id="current-admin-pw" placeholder="Password admin sekarang" autocomplete="off">
+              <button type="button" class="pw-eye-btn" onclick="toggleInputPw('current-admin-pw', this)" title="Lihat password">&#128065;</button>
+            </span>
+            <span class="pw-field">
+              <input type="password" id="new-admin-pw" placeholder="Password baru (min. 6 karakter)" autocomplete="off">
+              <button type="button" class="pw-eye-btn" onclick="toggleInputPw('new-admin-pw', this)" title="Lihat password">&#128065;</button>
+            </span>
+            <button onclick="changeAdminPassword()" class="btn">Ubah</button>
+          </div>
+        </div>
+
+        <div class="list-h">
+          <h2>Daftar Client</h2>
+          <div class="filters">
+            <button class="chip on" onclick="setFilter(this,'Semua')">Semua</button>
+            <button class="chip" onclick="setFilter(this,'Menunggu')">Menunggu</button>
+            <button class="chip" onclick="setFilter(this,'Diproses')">Diproses</button>
+            <button class="chip" onclick="setFilter(this,'Selesai')">Selesai</button>
+          </div>
+        </div>
+
+        <div id="client-list" class="client-list"></div>
       </div>
     </section>
+
+    <!-- ===================== -->
+    <!-- DETAIL CLIENT (admin)  -->
+    <!-- ===================== -->
+    <div id="client-detail" class="cdetail">
+      <div class="cd-inner">
+        <div class="cd-top">
+          <div>
+            <div class="caps" id="cd-caps">Detail Client</div>
+            <h2 id="cd-name">\u2014</h2>
+            <div class="cm" id="cd-meta"></div>
+          </div>
+          <button class="x" onclick="closeClientDetail()" title="Tutup (Esc)">&times;</button>
+        </div>
+
+        <div class="cd-blk">
+          <div class="cd-l">Informasi</div>
+          <dl class="kv" id="cd-kv"></dl>
+        </div>
+
+        <div class="cd-blk" id="cd-note-blk">
+          <div class="cd-l">Catatan dari Client</div>
+          <div class="note-box" id="cd-note"></div>
+        </div>
+
+        <div class="cd-blk" id="cd-sel-blk">
+          <div class="cd-l">Foto Terpilih</div>
+          <div class="thumbs" id="cd-thumbs"></div>
+        </div>
+
+        <div class="cd-blk">
+          <div class="cd-l">Status Pengerjaan</div>
+          <div class="status-picker" id="cd-status"></div>
+        </div>
+
+        <div class="cd-blk">
+          <div class="cd-l">Foto dari Google Drive</div>
+          <div class="cd-row">
+            <button class="btn q" onclick="openDrivePicker(CD_ID,'photos')">Pilih Foto</button>
+            <button class="btn q" onclick="openDrivePicker(CD_ID,'folder')">Import Folder</button>
+            <button class="btn q sm" onclick="clearClientPhotos(CD_ID)">Kosongkan</button>
+          </div>
+          <div class="cd-hint" id="cd-photo-count"></div>
+        </div>
+
+        <div class="cd-blk">
+          <div class="cd-l">Batas Pilihan Client</div>
+          <div class="cd-row">
+            <input type="number" class="numbox" min="0" id="cd-max" onchange="setMaxSelect(CD_ID, this.value)">
+            <span class="cd-hint">0 berarti tanpa batas</span>
+          </div>
+        </div>
+
+        <div class="cd-acts">
+          <button class="btn" id="cd-copy-btn" onclick="copySelectedToDrive(CD_ID)">Salin ke Folder Drive</button>
+          <a class="btn q" id="cd-folder-link" href="#" target="_blank" rel="noopener">Buka Folder di Drive</a>
+          <button class="btn q" id="cd-del-folder" onclick="deleteSelectedFolder(CD_ID)">Hapus Folder Salinan</button>
+          <button class="btn q sm" onclick="resetClientPassword(CD_ID)">Reset Password</button>
+          <button class="btn q sm danger" onclick="deleteClient(CD_ID)">Hapus Client</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ===================== -->
     <!-- GALLERY (client)      -->

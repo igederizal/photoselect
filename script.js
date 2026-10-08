@@ -163,10 +163,10 @@ function updateGoogleAuthStatus() {
 
   if (active || withinTtl) {
     const until = new Date(gAuthTime + GOOGLE_AUTH_TTL);
-    el.innerHTML = `✅ <strong>Tersambung</strong> — otomatis tanpa login sampai
-      ${until.toLocaleString('id-ID', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+    el.textContent = 'tersambung \u00b7 berlaku sampai ' +
+      until.toLocaleString('id-ID', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   } else {
-    el.innerHTML = `⚪ <strong>Belum tersambung</strong> — akan diminta login saat pilih foto`;
+    el.textContent = 'belum tersambung \u00b7 diminta login saat pilih foto';
   }
 }
 
@@ -463,10 +463,11 @@ async function clientLogin() {
 // =====================
 // TRANSISI HALAMAN
 // =====================
-// Header hanya muncul di panel admin. Halaman login dan galeri punya header sendiri.
+// Semua halaman punya bar sendiri, jadi header brand global tidak dipakai lagi.
 function setView(view) {
   document.body.classList.toggle('view-login', view === 'login');
   document.body.classList.toggle('view-gallery', view === 'gallery');
+  document.body.classList.toggle('view-admin', view === 'admin');
 }
 
 // Mengganti isi layar dengan fade singkat supaya tidak "lompat"
@@ -562,27 +563,32 @@ async function addClient() {
   const nameInput = document.getElementById('new-client-name');
   const name = nameInput.value.trim();
 
-  if (!name) { alert('Masukkan nama client dulu!'); return; }
+  if (!name) { showToast('Isi nama client dulu', true); nameInput.focus(); return; }
 
   let created;
   try {
     const r = await api('admin_add_client', { name: name });
     created = r.client;
   } catch (e) {
-    alert('Gagal simpan ke database!\n\n' + e.message);
+    showToast('Gagal menyimpan: ' + e.message, true);
     return;
   }
 
-  clients.push(created);
+  clients.unshift(created);
+  setFilter(null, 'Semua');
   renderClientList();
   nameInput.value = '';
+  nameInput.blur();
 
-  showModal('✅',
-    `Client "${name}" berhasil ditambahkan!\n\n` +
-    `Password: ${created.password}\n` +
-    `Folder: ${created.folder}\n\n` +
-    `Kirim password ini ke client Anda.`
-  );
+  const msg = document.getElementById('admin-message');
+  if (msg) {
+    msg.textContent = 'Client "' + name + '" dibuat. Password: ' +
+      (created.password || '(buka detail untuk lihat)');
+    msg.classList.remove('hidden');
+    setTimeout(() => msg.classList.add('hidden'), 8000);
+  }
+  showToast('Client "' + name + '" dibuat');
+  openClientDetail(created.id);
 }
 
 // =====================
@@ -604,7 +610,9 @@ async function resetClientPassword(id) {
 
   client.password = password;
   renderClientList();
-  showModal('🔑', `Password baru untuk "${client.name}":\n\n${password}\n\nKirim password ini ke client.`);
+  // password baru harus langsung terlihat, jadi buka lagi panel detail
+  if (CD_ID !== null) openClientDetail(client.id);
+  showToast('Password baru: ' + password);
 }
 
 // =====================
@@ -640,9 +648,12 @@ async function changeStatus(id, newStatus) {
     return;
   }
 
-  const client = clients.find(c => c.id === id);
+  const client = clients.find(c => String(c.id) === String(id));
   if (client) client.status = newStatus;
   renderClientList();
+  // panel detail masih terbuka: segarkan supaya label status ikut berubah
+  if (CD_ID !== null && String(CD_ID) === String(id)) openClientDetail(id);
+  showToast('Status: ' + newStatus);
 }
 
 // =====================
@@ -854,89 +865,157 @@ async function setMaxSelect(id, val) {
 // =====================
 // ADMIN: RENDER LIST
 // =====================
+let clientFilter = 'Semua';
+let CD_ID = null;      // client yang sedang dibuka di panel detail
+
+function renderStats() {
+  const n = { Menunggu: 0, Diproses: 0, Selesai: 0 };
+  let foto = 0;
+  for (const c of clients) {
+    if (n[c.status] !== undefined) n[c.status]++;
+    foto += (c.photos || []).length;
+  }
+  document.getElementById('st-total').textContent = clients.length;
+  document.getElementById('st-menunggu').textContent = n.Menunggu;
+  document.getElementById('st-diproses').textContent = n.Diproses;
+  document.getElementById('st-foto').textContent = foto;
+
+  const head = document.getElementById('admin-headline');
+  if (clients.length === 0) head.textContent = 'Belum ada client.';
+  else if (n.Menunggu > 0) head.textContent = 'Menunggu ' + n.Menunggu + ' client diproses.';
+  else if (n.Diproses > 0) head.textContent = 'Menunggu ' + n.Diproses + ' client dikerjakan.';
+  else head.textContent = 'Semua client selesai.';
+}
+
 function renderClientList() {
   const container = document.getElementById('client-list');
+  renderStats();
 
   if (clients.length === 0) {
     container.innerHTML = '<p class="empty-msg">Belum ada client. Tambahkan client baru di atas.</p>';
     return;
   }
 
-  container.innerHTML = clients.map((client, idx) => {
-    const statusClass = 'status-' + client.status.toLowerCase();
-    const files = client.selected_files || [];
-    const fileNames = files.map(f => (typeof f === 'string' ? f : f.name));
-    // Jangan tampilkan ribuan nama file (bikin panel admin berat)
-    const shownNames = fileNames.slice(0, 8).map(esc).join(', ');
-    const moreNames = fileNames.length > 8 ? ` … +${fileNames.length - 8} lainnya` : '';
-    const photoCount = (client.photos || []).length;
-    const selectedInfo = client.submitted && files.length > 0
-      ? `<div class="selected-info">✅ ${files.length} foto dipilih: ${shownNames}${moreNames}</div>`
-      : '';
-    const noteInfo = client.note
-      ? `<div class="note-box">📝 ${esc(client.note)}</div>`
-      : '<div class="note-box"><span class="no-note">Belum ada catatan</span></div>';
+  const data = clientFilter === 'Semua'
+    ? clients
+    : clients.filter(c => c.status === clientFilter);
+
+  if (data.length === 0) {
+    container.innerHTML =
+      `<p class="empty-msg">Tidak ada client berstatus ${esc(clientFilter)}.</p>`;
+    return;
+  }
+
+  container.innerHTML = data.map(c => {
+    const statusClass = 'status-' + String(c.status || '').toLowerCase();
+    const files = c.selected_files || [];
+    const photoCount = (c.photos || []).length;
+    const pwTxt = c.password || '\u2014';
 
     return `
-    <div class="client-row client-card">
-      <div class="client-top">
-        <div class="client-num">${idx + 1}</div>
-        <div class="client-info">
-          <span class="name">${esc(client.name)}</span>
-          <span class="folder">📁 ${esc(client.folder)}</span>
-        </div>
-        <div class="pw-wrap">
-          <div class="pw-box" data-cid="${client.id}" onclick="copyPassword(${client.id})" title="Klik untuk copy (otomatis diverifikasi)">
-            ${esc(client.password || '—')}
-          </div>
-          <button class="pw-eye" onclick="togglePassword(${client.id})" title="Lihat / sembunyikan password">👁</button>
-          ${client.pw_ok === false ? '<span class="pw-warn" title="Password tidak cocok dengan hash - Reset password">⚠</span>' : ''}
-        </div>
-      </div>
-
-      <div class="client-detail">
-        <span class="status-badge ${statusClass}">${client.status}</span>
-        <div class="status-picker">
-          <button class="status-btn s-menunggu" onclick="changeStatus(${client.id}, 'Menunggu')">Menunggu</button>
-          <button class="status-btn s-diproses" onclick="changeStatus(${client.id}, 'Diproses')">Diproses</button>
-          <button class="status-btn s-selesai" onclick="changeStatus(${client.id}, 'Selesai')">Selesai</button>
+    <div class="cli" onclick="openClientDetail('${esc(c.id)}')">
+      <div class="cli-main">
+        <div class="cn">${esc(c.name)}</div>
+        <div class="cm">
+          <span class="st ${statusClass}">${esc(c.status)}</span>
+          <span class="pw" data-cid="${esc(c.id)}" title="Klik untuk copy"
+                onclick="event.stopPropagation();copyPassword('${esc(c.id)}', this)">${esc(pwTxt)}</span>
+          ${c.pw_ok === false ? '<span class="pw-warn" title="Password tidak cocok dengan hash - Reset password">!</span>' : ''}
+          <i class="cm-dot"></i><span>${photoCount} foto</span>
+          <i class="cm-dot"></i><span>${(c.max_select || 0) > 0 ? 'maks ' + c.max_select : 'tanpa batas'}</span>
+          ${c.submitted && files.length > 0
+            ? '<i class="cm-dot"></i><span class="sent"><i></i>' + files.length + ' dipilih</span>' : ''}
         </div>
       </div>
-
-      <div class="limit-row">
-        <span>Maks. foto dipilih</span>
-        <input type="number" min="0" value="${client.max_select || 0}"
-               onchange="setMaxSelect(${client.id}, this.value)"
-               title="Isi 0 untuk tanpa batas">
-        <span class="limit-hint">0 = tanpa batas</span>
-      </div>
-
-      <div class="photo-actions">
-        <button class="drive-btn" onclick="openDrivePicker(${client.id}, 'photos')">📷 Pilih Foto</button>
-        <button class="drive-btn" onclick="openDrivePicker(${client.id}, 'folder')">📁 Import Folder</button>
-        <span class="photo-count">🎞️ ${photoCount} foto diposting</span>
-        ${photoCount > 0 ? `<button class="clear-photo-btn" onclick="clearClientPhotos(${client.id})">Kosongkan</button>` : ''}
-      </div>
-
-      ${selectedInfo}
-      ${client.submitted && files.length > 0 ? `
-      <div class="folder-actions">
-        <button class="drive-btn" onclick="copySelectedToDrive(${client.id})">
-          📁 Salin ${files.length} foto terpilih ke folder
-        </button>
-        ${client.selected_folder ? `
-        <a class="folder-link" href="${client.selected_folder}" target="_blank" rel="noopener">🔗 Buka folder di Drive</a>
-        <button class="clear-photo-btn" onclick="deleteSelectedFolder(${client.id})" title="Pindahkan folder salinan ke Trash Google Drive">🗑️ Hapus folder salinan</button>` : ''}
-      </div>` : ''}
-      ${noteInfo}
-
-      <div class="client-bottom">
-        <button class="reset-pw-btn" onclick="resetClientPassword(${client.id})" title="Buat password baru">🔑 Reset password</button>
-        <button class="delete-btn" onclick="deleteClient(${client.id})">Hapus</button>
-      </div>
-    </div>
-  `;
+      <div class="go" aria-hidden="true">&rsaquo;</div>
+    </div>`;
   }).join('');
+}
+
+function setFilter(el, f) {
+  clientFilter = f;
+  document.querySelectorAll('.filters .chip').forEach(c => c.classList.remove('on'));
+  if (el) el.classList.add('on');
+  renderClientList();
+}
+
+function togglePwForm() {
+  document.getElementById('pwband').classList.toggle('hidden');
+}
+
+function openClientDetail(id) {
+  const c = clients.find(x => String(x.id) === String(id));
+  if (!c) return;
+  CD_ID = c.id;
+
+  const files = c.selected_files || [];
+  const photoCount = (c.photos || []).length;
+  const statusClass = 'status-' + String(c.status || '').toLowerCase();
+
+  document.getElementById('cd-name').textContent = c.name;
+  document.getElementById('cd-meta').innerHTML =
+    `<span class="st ${statusClass}">${esc(c.status)}</span>` +
+    `<span>Folder ${esc(c.folder)}</span>`;
+
+  document.getElementById('cd-kv').innerHTML =
+    `<dt>Password</dt><dd><span class="pw" data-cid="${esc(c.id)}" style="cursor:pointer"
+        onclick="copyPassword('${esc(c.id)}', this)">${esc(c.password || '\u2014')}</span></dd>` +
+    `<dt>Foto diposting</dt><dd>${photoCount} foto</dd>` +
+    `<dt>Status client</dt><dd>${c.submitted ? 'Sudah mengirim pilihan' : 'Belum mengirim'}</dd>`;
+
+  const hasNote = !!(c.note && c.note.trim());
+  document.getElementById('cd-note-blk').classList.toggle('hidden', !hasNote);
+  if (hasNote) document.getElementById('cd-note').textContent = c.note;
+
+  // pratinjau foto terpilih
+  document.getElementById('cd-sel-blk').classList.toggle('hidden', files.length === 0);
+  const th = document.getElementById('cd-thumbs');
+  if (files.length > 0) {
+    let html = '';
+    for (let i = 0; i < Math.min(files.length, 6); i++) {
+      const f = files[i];
+      const src = (typeof f === 'object' && f.thumb) || '';
+      html += src
+        ? `<img src="${esc(src)}" alt="" loading="lazy">`
+        : '<div class="thumb-ph">&#128247;</div>';
+    }
+    if (files.length > 6) html += '<div class="thumb-ph">+' + (files.length - 6) + '</div>';
+    th.innerHTML = html;
+  } else {
+    th.innerHTML = '';
+  }
+
+  // status picker
+  document.getElementById('cd-status').innerHTML = ['Menunggu', 'Diproses', 'Selesai']
+    .map(s => `<button class="status-btn s-${s.toLowerCase()}"
+        onclick="changeStatus(CD_ID,'${s}')">${s}</button>`).join('');
+
+  document.getElementById('cd-photo-count').textContent =
+    photoCount > 0 ? photoCount + ' foto terposting ke client ini.' : 'Belum ada foto diposting.';
+  document.getElementById('cd-max').value = c.max_select || 0;
+
+  // tombol folder Drive hanya relevan kalau client sudah kirim & sudah ada salinan
+  const punyaSalinan = c.submitted && files.length > 0;
+  document.getElementById('cd-copy-btn').style.display = punyaSalinan ? '' : 'none';
+  const link = document.getElementById('cd-folder-link');
+  const delF = document.getElementById('cd-del-folder');
+  if (c.selected_folder) {
+    link.href = c.selected_folder;
+    link.style.display = '';
+    delF.style.display = '';
+  } else {
+    link.style.display = 'none';
+    delF.style.display = 'none';
+  }
+
+  document.getElementById('client-detail').classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeClientDetail() {
+  document.getElementById('client-detail').classList.remove('on');
+  document.body.style.overflow = '';
+  CD_ID = null;
 }
 
 // =====================
@@ -961,35 +1040,43 @@ async function clearAllData() {
     : 'Semua data client berhasil dihapus.');
 }
 
-function copyPassword(id) {
-  const client = clients.find(c => c.id === id);
+// Copy password client. Verifikasi dulu ke server supaya yang tersalin
+// benar-benar password yang berlaku.
+function copyPassword(id, el) {
+  const client = clients.find(c => String(c.id) === String(id));
   if (!client) return;
   const pw = client.password || '';
-  if (!pw) { showModal('⚠️', 'Password belum tersedia. Coba 🔑 Reset password.'); return; }
+  if (!pw) { showToast('Password belum tersedia, reset dulu', true); return; }
 
-  // Verifikasi dulu ke server: pastikan password yang tampil benar-benar berlaku
+  const plain = () => {
+    if (navigator.clipboard) return navigator.clipboard.writeText(pw);
+    showToast('Password: ' + pw + ' (salin manual)');
+    return Promise.resolve();
+  };
+
   api('admin_verify_password', { password: pw })
     .then(r => {
       if (r.result !== 'client') {
-        showModal('⚠️', 'Password yang ditampilkan tidak cocok dengan database.\n\nSebaiknya klik "🔑 Reset password" untuk membuat yang baru.');
+        showToast('Password tidak cocok dengan database, reset dulu', true);
         return;
       }
-      return navigator.clipboard.writeText(pw).then(() => {
-        showModal('📋', `Password "${pw}" berhasil di-copy!\n\n(terverifikasi ✓ untuk ${r.name})`);
+      plain().then(() => {
+        showToast('Password disalin untuk ' + (r.name || client.name));
+        flashPw(el);
       });
     })
-    .catch(() => {
-      navigator.clipboard.writeText(pw).then(() => {
-        showModal('📋', `Password "${pw}" berhasil di-copy!`);
-      }).catch(() => {
-        showModal('📋', `Password: ${pw}\n(Salin manual ya)`);
-      });
-    });
+    .catch(plain);
 }
 
-// Sembunyikan / tampilkan password (cegah ketikan terlihat saat share layar)
+// klik password menyalin; klik lagi menyembunyikan (aman saat share layar)
+function flashPw(el) {
+  if (!el) return;
+  el.classList.add('ok');
+  setTimeout(() => el.classList.remove('ok'), 900);
+}
+
 function togglePassword(id) {
-  const box = document.querySelector(`.pw-box[data-cid="${id}"]`);
+  const box = document.querySelector(`.pw[data-cid="${id}"]`);
   if (box) box.classList.toggle('masked');
 }
 
@@ -1194,11 +1281,21 @@ function closeZoom() {
 }
 
 document.addEventListener('keydown', function (e) {
+  const panel = document.getElementById('client-detail');
+  if (panel && panel.classList.contains('on')) {
+    if (e.key === 'Escape') closeClientDetail();
+    return;
+  }
+
   const overlay = document.getElementById('zoom-overlay');
   if (!overlay || overlay.classList.contains('hidden')) return;
   if (e.key === 'Escape') closeZoom();
   else if (e.key === 'ArrowLeft') zoomStep(-1);
   else if (e.key === 'ArrowRight') zoomStep(1);
+});
+
+document.getElementById('client-detail').addEventListener('click', function (e) {
+  if (e.target === this) closeClientDetail();
 });
 
 // =====================
