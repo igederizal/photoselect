@@ -460,6 +460,77 @@ async function clientLogin() {
   }
 }
 
+// =====================================================
+// SLIDESHOW PANEL KIRI HALAMAN MASUK
+// Foto berganti di belakang brand. Isi brand tidak
+// berubah, hanya foto latar yang bergeser.
+// =====================================================
+const HERO_SLIDES = 5500;   // jeda antar foto (ms)
+let heroIdx = 0;
+let heroTimer = null;
+
+function initHeroSlides() {
+  const wrap = document.getElementById('lb-slides');
+  if (!wrap) return;
+  const imgs = Array.from(wrap.querySelectorAll('img'));
+  if (imgs.length < 2) return;
+
+  // titik penanda dibuat sesuai jumlah foto
+  const dots = document.getElementById('lb-dots');
+  if (dots) dots.innerHTML = imgs.map(() => '<i></i>').join('');
+  const marks = dots ? Array.from(dots.querySelectorAll('i')) : [];
+
+  const show = (i) => {
+    imgs.forEach((im, k) => im.classList.toggle('on', k === i));
+    marks.forEach((m, k) => m.classList.toggle('on', k === i));
+    heroIdx = i;
+  };
+
+  // pindah foto hanya saat halaman masuk yang sedang terlihat
+  const onLogin = () => {
+    const s = document.getElementById('section-login');
+    return s && !s.classList.contains('hidden');
+  };
+
+  const reduced = !!(window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  const tick = () => {
+    if (onLogin() && !document.hidden) show((heroIdx + 1) % imgs.length);
+  };
+
+  const restart = () => {
+    clearInterval(heroTimer);
+    if (!reduced) heroTimer = setInterval(tick, HERO_SLIDES);
+  };
+
+  show(0);
+  restart();
+
+  // swipe di HP: geser ke foto berikutnya
+  let x0 = null;
+  const brand = wrap.parentElement;
+  if (brand) {
+    brand.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; },
+      { passive: true });
+    brand.addEventListener('touchend', (e) => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0;
+      if (Math.abs(dx) > 48) {
+        show((heroIdx + (dx < 0 ? 1 : imgs.length - 1)) % imgs.length);
+        restart();
+      }
+      x0 = null;
+    }, { passive: true });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHeroSlides);
+} else {
+  initHeroSlides();
+}
+
 // =====================
 // TRANSISI HALAMAN
 // =====================

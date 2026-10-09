@@ -31,12 +31,23 @@
     <!-- ===================== -->
     <section id="section-login" class="tab-content login-split">
       <div class="login-brand">
-        <div class="lb-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="caps">Portal Seleksi Foto</div>
-        <h1>MY<br>HISTORIA</h1>
-        <div class="lb-rule"></div>
-        <p>Wedding &amp; Event Content Creator.<br>
-           Foto acara Anda telah selesai diedit dan siap dipilih untuk dicetak.</p>
+        <div class="lb-slides" id="lb-slides" aria-hidden="true">
+          <img src="img/hero/slide-01.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-02.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-03.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-04.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-05.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-06.jpg" alt="" decoding="async">
+          <img src="img/hero/slide-07.jpg" alt="" decoding="async">
+        </div>
+        <div class="lb-content">
+          <div class="lb-dots" id="lb-dots"></div>
+          <div class="caps">Portal Seleksi Foto</div>
+          <h1>MY<br>HISTORIA</h1>
+          <div class="lb-rule"></div>
+          <p>Wedding &amp; Event Content Creator.<br>
+             Foto acara Anda telah selesai diedit dan siap dipilih untuk dicetak.</p>
+        </div>
       </div>
 
       <div class="login-panel">
@@ -303,5 +314,9 @@
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
   <script src="script.js?v=2"></script>
+
+  <!-- Mode demo: aktif hanya bila alamatnya berakhiran ?demo=1 -->
+  <script src="demo/photos.js"></script>
+  <script src="demo/demo-mode.js"></script>
 </body>
 </html>

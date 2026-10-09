@@ -2,8 +2,12 @@ node_modules
 server.js
 package-lock.json
 preview
+Dokumen
+gen-demo.js
+gen-hero.js
 shots2
 shots3
 shots4
+shots5
 shots
 *.log
