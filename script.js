@@ -1192,6 +1192,86 @@ function togglePassword(id) {
   if (box) box.classList.toggle('masked');
 }
 
+// Susun pesan WhatsApp untuk client: nama, link portal, password, batas
+// pilih, dan batas waktu. Baris yang tidak berlaku dilewati supaya tidak
+// ada baris kosong yang membingungkan.
+function buildClientMessage(c) {
+  const lines = [];
+  const nama = (c.name || '').trim();
+  const sapaan = nama ? 'Halo Kak ' + nama + ',' : 'Halo,';
+
+  lines.push(sapaan, '');
+  lines.push('Foto acara Anda sudah siap dipilih di MYHISTORIA:');
+  lines.push(location.origin);
+  lines.push('');
+
+  const pw = (c.password || '').trim();
+  if (pw) lines.push('Password: ' + pw);
+
+  const max = Number(c.max_select) || 0;
+  if (max > 0) lines.push('Batas pilih: ' + max + ' foto');
+
+  if (c.deadline) {
+    const d = new Date(c.deadline);
+    if (!isNaN(d.getTime())) {
+      lines.push('Pilih sebelum: ' + d.toLocaleString('id-ID', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
+      }) + ' WIB');
+    }
+  }
+
+  lines.push('');
+  lines.push('Silakan login, lalu kirim pilihannya di dalam aplikasi.');
+  lines.push('Kalau ada yang membingungkan, balas chat ini ya.');
+
+  return lines.join('\n');
+}
+
+function copyClientMessage(id) {
+  const c = clients.find(x => String(x.id) === String(id));
+  if (!c) return;
+
+  if (!(c.password || '').trim()) {
+    showToast('Password belum tersedia, reset dulu', true);
+    return;
+  }
+
+  const msg = buildClientMessage(c);
+  const btn = document.getElementById('cd-msg-btn');
+
+  const done = () => {
+    if (btn) btn.classList.add('ok');
+    showToast('Pesan untuk ' + c.name + ' disalin, paste ke WhatsApp');
+    setTimeout(() => { if (btn) btn.classList.remove('ok'); }, 900);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(msg).then(done).catch(() => fallback(msg, done));
+  } else {
+    fallback(msg, done);
+  }
+}
+
+// clipboard API butuh konteks aman (https/localhost); kalau ditolak,
+// tampilkan teksnya supaya admin masih bisa menyalin manual.
+function fallback(msg, done) {
+  showToast('Browser memblokir salin otomatis, salin manual:');
+  let box = document.getElementById('msg-fallback');
+  if (!box) {
+    box = document.createElement('textarea');
+    box.id = 'msg-fallback';
+    box.style.cssText = 'position:fixed;top:-9999px;left:0;';
+    document.body.appendChild(box);
+  }
+  box.value = msg;
+  box.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  if (ok) done();
+  else window.prompt('Salin pesan ini:', msg);
+}
+
 // =====================
 // TAMPILKAN GALLERY
 // =====================

@@ -457,6 +457,8 @@ body.view-admin .app-container { padding: 0; max-width: none; }
 .btn.danger { color: var(--danger); border-color: rgba(234,67,53,0.4); }
 .btn.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.ok { background: var(--success); border-color: var(--success); color: #fff; }
+.btn.q.ok { color: var(--success); border-color: var(--success); }
 
 .set-body { display: grid; grid-template-columns: repeat(3, 1fr); }
 .set-body .row { display: flex; align-items: center; justify-content: space-between; gap: 14px;

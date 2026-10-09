@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@200;300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body class="view-login">
   <div class="app-container">
@@ -232,6 +232,7 @@
         </div>
 
         <div class="cd-acts">
+          <button class="btn q" id="cd-msg-btn" onclick="copyClientMessage(CD_ID)">Salin Pesan Client</button>
           <button class="btn" id="cd-copy-btn" onclick="copySelectedToDrive(CD_ID)">Salin ke Folder Drive</button>
           <a class="btn q" id="cd-folder-link" href="#" target="_blank" rel="noopener">Buka Folder di Drive</a>
           <button class="btn q" id="cd-del-folder" onclick="deleteSelectedFolder(CD_ID)">Hapus Folder Salinan</button>
@@ -313,7 +314,7 @@
 
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
-  <script src="script.js?v=2"></script>
+  <script src="script.js?v=3"></script>
 
   <!-- Mode demo: aktif hanya bila alamatnya berakhiran ?demo=1 -->
   <script src="demo/photos.js"></script>
